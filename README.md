@@ -325,15 +325,6 @@ youtube-music-manager/
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Ensure code quality: `make lint`
-5. Run tests: `make test`
-6. Submit a pull request
-
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development guidelines.
 
 ## License
