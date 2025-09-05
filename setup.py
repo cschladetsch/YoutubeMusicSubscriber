@@ -43,7 +43,7 @@ setup(
     ],
     keywords="youtube music subscription management cli automation",
     project_urls={
-        "Bug Reports": "https://github.com/user/youtube-music-manager/issues",
-        "Source": "https://github.com/user/youtube-music-manager",
+        "Bug Reports": "https://github.com/cschladetsch/youtube-music-manager/issues",
+        "Source": "https://github.com/cschladetsch/youtube-music-manager",
     },
 )
