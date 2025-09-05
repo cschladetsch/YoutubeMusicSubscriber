@@ -78,3 +78,9 @@ Thumbs.db
 # Configuration
 .ytmusic-manager/
 
+# Logs
+*.log
+
+# Editor config is included in repo
+# .editorconfig
+
