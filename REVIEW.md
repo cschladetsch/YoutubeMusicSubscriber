@@ -21,6 +21,10 @@ This tool was created to solve a simple problem: bulk subscribing to a list of a
 - Two subscription modes: one-at-a-time or bulk tabs
 - Respects rate limits with built-in delays
 
+### ✅ Fully Automated
+- No manual clicking required - subscriptions happen automatically
+- Simply paste script and let it run
+
 ## Technical Decisions
 
 ### Browser JavaScript vs API
@@ -35,16 +39,10 @@ This tool was created to solve a simple problem: bulk subscribing to a list of a
 
 ## Limitations
 
-- **Manual clicking required**: User must still click "Subscribe" buttons
 - **Browser-dependent**: Requires browser with developer console access
 - **No verification**: Doesn't verify successful subscriptions
 - **Rate limiting**: Manual delays to avoid overwhelming the service
 
-## Performance
-
-- **Setup time**: ~30 seconds (edit file, run generator, open browser)
-- **Subscription time**: ~2-5 seconds per artist depending on method chosen
-- **Total time for 16 artists**: ~2-5 minutes including setup
 
 ## Future Improvements (if needed)
 
