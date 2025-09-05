@@ -1,51 +1,100 @@
-# YouTube Music Auto-Sync
+# YouTube Music Manager
 
-Automatically sync your YouTube Music subscriptions to match a text file list of artists.
+Clean CLI tool for managing YouTube Music subscriptions from a text file.
 
-## Files
+## Features
 
-- `artists.txt` - List of artists to subscribe to (one per line)
-- `auto_sync.py` - Generator script that creates the browser JavaScript
-- `auto_sync.js` - Generated browser script (auto-opens all artist tabs)
+- 🎵 **Sync subscriptions** to match your artist list
+- 📋 **List current subscriptions** and export to file  
+- ✅ **Validate artist files** before syncing
+- 🔍 **Proper error handling** and logging
+- 🎛️ **Flexible options** (dry-run, headless, interactive)
 
-## Requirements
+## Installation
 
-- Python 3.x
-- A web browser with YouTube Music access
-
-## How to Use
-
-### Step 1: Edit Your Artist List
-Edit `artists.txt` and add/remove artists (one per line):
-```
-Faith No More
-Nine Inch Nails
-Rammstein
-```
-
-### Step 2: Generate Auto-Sync Script
 ```bash
-python3 auto_sync.py
+pip install -r requirements.txt
 ```
-This reads `artists.txt` and generates `auto_sync.js`
 
-### Step 3: Auto-Sync in Browser
-1. **Open YouTube Music** in your browser and log in
-2. **Open Developer Console** (Press F12 → Console tab)
-3. **Copy and paste** the entire contents of `auto_sync.js`
-4. **All artist tabs open automatically** with 2-second delays
-5. **Subscribe to each artist** in the opened tabs
+You'll also need Chrome/Chromium installed for Selenium WebDriver.
 
-## Workflow for Updates
+## Usage
 
-1. **Edit** `artists.txt` (add/remove artists)
-2. **Run** `python3 auto_sync.py` to regenerate the script
-3. **Copy/paste** the updated `auto_sync.js` into browser console
+### Basic Sync
+```bash
+python3 main.py sync
+```
 
-## Notes
+### List Current Subscriptions
+```bash
+python3 main.py list --output my_artists.txt
+```
 
-- The script automatically opens all artists in separate tabs
-- No manual commands needed - just paste and it works
-- Make sure you're logged into YouTube Music
-- Works with any modern browser (Chrome, Firefox, Safari, etc.)
-- 2-second delays between tab opens to avoid overwhelming the browser
+### Validate Artist File
+```bash
+python3 main.py validate
+```
+
+### Advanced Options
+```bash
+# Dry run (show what would happen)
+python3 main.py sync --dry-run
+
+# Show browser (for debugging)
+python3 main.py sync --browser --interactive
+
+# Custom artist file and delays
+python3 main.py sync --artists-file my_artists.txt --delay 3.0
+```
+
+## Artist File Format
+
+Edit `artists.txt` with one artist per line:
+
+```
+# Comments start with #
+Faith No More
+Nine Inch Nails|metal|industrial
+Rammstein|metal
+Caravan Palace|electro swing|french
+
+# Tags after | are optional but help with matching
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `sync` | Sync subscriptions to match artist file |
+| `list` | Show current subscriptions |
+| `validate` | Check artist file format |
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--dry-run` | Show what would be done without making changes |
+| `--browser` | Show browser instead of headless mode |
+| `--interactive` | Pause for manual login |
+| `--verbose` | Enable detailed logging |
+| `--artists-file FILE` | Use custom artist file (default: artists.txt) |
+
+## Architecture
+
+Clean, testable code structure:
+
+```
+lib/
+├── models.py    # Data classes (Artist, SyncResult, Config)
+├── youtube.py   # YouTube Music client (Selenium-based)
+├── sync.py      # Sync engine logic
+└── __init__.py
+
+main.py          # CLI interface
+requirements.txt # Dependencies
+artists.txt      # Your artist list
+```
+
+## Logging
+
+Logs are written to `youtube_music_manager.log` and console. Use `--verbose` for detailed output.
