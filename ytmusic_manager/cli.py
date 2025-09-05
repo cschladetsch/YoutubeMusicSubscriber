@@ -134,26 +134,32 @@ def cmd_validate(args):
 
 def create_parser():
     """Create argument parser."""
+    # Create a parent parser with global options that will be inherited by subcommands
+    global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+    global_parser.add_argument('--show-browser', action='store_true', help='Show browser window (default: headless)')
+    
+    # Main parser
     parser = argparse.ArgumentParser(
+        prog='ytmusic-manager',
         description="YouTube Music Manager - Sync your artist subscriptions",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[global_parser],
         epilog="""
 Examples:
   %(prog)s sync                    # Sync subscriptions (dry-run by default)  
   %(prog)s sync --no-dry-run       # Actually make changes
-  %(prog)s list                    # Show current subscriptions
-  %(prog)s validate                # Check artists.txt file
+  %(prog)s list --show-browser     # Show current subscriptions with visible browser
+  %(prog)s validate --verbose      # Check artists.txt file with detailed output
         """
     )
     
     parser.add_argument('--version', action='version', version='%(prog)s 0.1.0')
-    parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
-    parser.add_argument('--show-browser', action='store_true', help='Show browser window (default: headless)')
     
     subparsers = parser.add_subparsers(dest='command', help='Commands', required=True)
     
     # Sync command
-    sync_parser = subparsers.add_parser('sync', help='Sync artist subscriptions')
+    sync_parser = subparsers.add_parser('sync', help='Sync artist subscriptions', parents=[global_parser])
     sync_parser.add_argument('--artists-file', default='artists.txt', help='Artists file path')
     sync_parser.add_argument('--dry-run', action='store_true', default=True, help='Preview changes without making them')
     sync_parser.add_argument('--no-dry-run', dest='dry_run', action='store_false', help='Actually make changes')
@@ -162,12 +168,12 @@ Examples:
     sync_parser.set_defaults(func=cmd_sync)
     
     # List command
-    list_parser = subparsers.add_parser('list', help='List current subscriptions')  
+    list_parser = subparsers.add_parser('list', help='List current subscriptions', parents=[global_parser])
     list_parser.add_argument('--output', '-o', help='Save to file')
     list_parser.set_defaults(func=cmd_list)
     
     # Validate command
-    validate_parser = subparsers.add_parser('validate', help='Validate artists file')
+    validate_parser = subparsers.add_parser('validate', help='Validate artists file', parents=[global_parser])
     validate_parser.add_argument('--artists-file', default='artists.txt', help='Artists file path')
     validate_parser.set_defaults(func=cmd_validate)
     
