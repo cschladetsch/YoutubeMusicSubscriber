@@ -28,7 +28,7 @@ YouTube Music Manager allows you to synchronize your YouTube Music subscriptions
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone git@github.com:cschladetsch/YoutubeMusicSubscriber.git
 cd youtube-music-manager
 
 # Create virtual environment (recommended)
