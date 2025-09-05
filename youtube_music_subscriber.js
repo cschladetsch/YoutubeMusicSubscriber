@@ -1,6 +1,5 @@
-
 // YouTube Music Artist Subscriber
-// Paste this in browser console on music.youtube.com
+// Auto-generated from artists.txt
 
 const artists = [
     "Gramatik",
@@ -51,6 +50,7 @@ function subscribeAll() {
 }
 
 console.log("🎵 YouTube Music Artist Subscriber Ready!");
+console.log(`📋 Found ${artists.length} artists from artists.txt`);
 console.log("Commands:");
 console.log("  subscribeNext() - Process one artist at a time");
 console.log("  subscribeAll()  - Open all artists in new tabs");
