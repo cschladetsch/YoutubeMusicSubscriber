@@ -1,0 +1,5 @@
+#!/bin/bash
+# YouTube Music Manager - Cargo Run Wrapper
+# Usage: ./run [cargo run arguments...]
+
+exec cargo run -- "$@"
