@@ -251,7 +251,7 @@ impl YouTubeClient {
         info!("Fetching real details for known subscription channels");
         // This function is now only used by sync - return all results
         // Use config artists by default
-        let (artists, _) = self.get_subscriptions_with_pagination(0, 1000, None, false).await?;
+        let (artists, _, _) = self.get_subscriptions_with_pagination(0, 1000, None, false).await?;
         return Ok(artists);
     }
 
@@ -314,7 +314,7 @@ impl YouTubeClient {
         anyhow::bail!("Failed to get channel details for {channel_id}")
     }
 
-    pub async fn get_subscriptions_with_pagination(&self, offset: usize, limit: usize, artists_file: Option<&std::path::Path>, force_update: bool) -> Result<(Vec<Artist>, bool)> {
+    pub async fn get_subscriptions_with_pagination(&self, offset: usize, limit: usize, artists_file: Option<&std::path::Path>, force_update: bool) -> Result<(Vec<Artist>, bool, usize)> {
         // Get the channels to fetch - either from file or config
         let all_channels = if let Some(file_path) = artists_file {
             // Use provided artists file
@@ -323,7 +323,8 @@ impl YouTubeClient {
                 Err(_) => {
                     warn!("Could not read artists file: {}, using mock data", file_path.display());
                     let mock_subs = self.get_mock_subscriptions().await?;
-                    return Ok((mock_subs, false));
+                    let len = mock_subs.len();
+                    return Ok((mock_subs, false, len));
                 }
             };
             
@@ -332,7 +333,8 @@ impl YouTubeClient {
                 Err(_) => {
                     warn!("Could not parse artists file, using mock data");
                     let mock_subs = self.get_mock_subscriptions().await?;
-                    return Ok((mock_subs, false));
+                    let len = mock_subs.len();
+                    return Ok((mock_subs, false, len));
                 }
             }
         } else {
@@ -348,7 +350,7 @@ impl YouTubeClient {
             .collect();
         
         if page_channels.is_empty() {
-            return Ok((Vec::new(), false)); // No more results
+            return Ok((Vec::new(), false, total_channels)); // No more results
         }
         
         let has_more = offset + page_channels.len() < total_channels;
@@ -446,11 +448,12 @@ impl YouTubeClient {
         
         if artists.is_empty() {
             let mock_subs = self.get_mock_subscriptions().await?;
-            return Ok((mock_subs, false));
+            let len = mock_subs.len();
+            return Ok((mock_subs, false, len));
         }
         
         info!("Successfully fetched details for {} channels", artists.len());
-        Ok((artists, has_more))
+        Ok((artists, has_more, total_channels))
     }
 
     async fn get_mock_subscriptions(&self) -> Result<Vec<Artist>> {

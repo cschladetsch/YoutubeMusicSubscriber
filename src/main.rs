@@ -303,9 +303,15 @@ async fn cmd_list(
     let mut offset = 0;
     let limit = 50; // Show more at once with higher quotas
     let mut all_subscriptions = Vec::new();
+    let mut total_channels = 0;
     
     loop {
-        let (subscriptions, has_more) = client.get_subscriptions_with_pagination(offset, limit, artists_file, update_artist_info).await?;
+        let (subscriptions, has_more, total) = client.get_subscriptions_with_pagination(offset, limit, artists_file, update_artist_info).await?;
+        
+        // Set total_channels on first iteration
+        if offset == 0 {
+            total_channels = total;
+        }
         
         if subscriptions.is_empty() && offset == 0 {
             println!("{}", "No subscriptions found.".bright_yellow());
@@ -353,10 +359,10 @@ async fn cmd_list(
         println!(); // Add spacing
     }
     
-    println!("\n{} {} {}", 
-             "Total subscriptions shown:".bright_green(), 
+    println!("\n{}/{} {}", 
              all_subscriptions.len().to_string().bright_white().bold(),
-             "subscriptions".bright_green());
+             total_channels.to_string().bright_white().bold(),
+             "Subscriptions shown".bright_green());
     
     if let Some(output_file) = output {
         let content = all_subscriptions.iter()
