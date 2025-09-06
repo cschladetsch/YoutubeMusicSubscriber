@@ -128,7 +128,7 @@ async fn cmd_sync(
     artists_file: &PathBuf,
     dry_run: bool,
     delay: f64,
-    interactive: bool,
+    _interactive: bool,
     _headless: bool, // Not needed for API
     _verbose: bool,
 ) -> anyhow::Result<()> {
@@ -148,23 +148,84 @@ async fn cmd_sync(
     let target_artists = parse_artists_file(&content)?;
     info!("Loaded {} target artists from {}", target_artists.len(), artists_file.display());
 
-    // Mock implementation for now - YouTube API will be implemented later
+    // Initialize YouTube client
+    let client = YouTubeClient::new().await?;
+    
+    // Get current subscriptions
+    let current_subscriptions = client.get_my_subscriptions().await?;
+    let current_names: HashSet<String> = current_subscriptions
+        .iter()
+        .map(|a| a.name.to_lowercase())
+        .collect();
+
+    // Find artists to subscribe to
+    let mut to_subscribe = Vec::new();
+    let mut already_subscribed = Vec::new();
+    
+    for target in &target_artists {
+        if current_names.contains(&target.to_lowercase()) {
+            already_subscribed.push(target.clone());
+        } else {
+            to_subscribe.push(target.clone());
+        }
+    }
+
+    // Display sync plan
     println!("\nSYNC PLAN:");
     println!("==================================================");
-    println!("Current subscriptions: 0 (API not yet connected)");
+    println!("Current subscriptions: {}", current_subscriptions.len());
     println!("Target artists: {}", target_artists.len());
-    println!("To subscribe: {} (all targets)", target_artists.len());
+    println!("Already subscribed: {}", already_subscribed.len());
+    println!("To subscribe: {}", to_subscribe.len());
 
-    if dry_run {
-        println!("\nDRY RUN - No changes will be made");
-        println!("\nWould SUBSCRIBE to:");
-        for artist in &target_artists {
-            println!("  + {}", artist);
+    if !already_subscribed.is_empty() {
+        println!("\nAlready SUBSCRIBED to:");
+        for artist in &already_subscribed {
+            println!("  ✓ {}", artist);
         }
-        println!("\nNote: YouTube API integration not yet complete");
+    }
+
+    if !to_subscribe.is_empty() {
+        if dry_run {
+            println!("\nDRY RUN - Would SUBSCRIBE to:");
+            for artist in &to_subscribe {
+                println!("  + {}", artist);
+            }
+        } else {
+            println!("\nSUBSCRIBING to {} artists:", to_subscribe.len());
+            
+            for (i, artist_name) in to_subscribe.iter().enumerate() {
+                println!("  [{}/{}] Searching for: {}", i + 1, to_subscribe.len(), artist_name);
+                
+                match client.search_artist(artist_name).await {
+                    Ok(Some(artist)) => {
+                        println!("    Found: {} ({})", artist.name, artist.channel_id);
+                        
+                        match client.subscribe_to_channel(&artist.channel_id).await {
+                            Ok(()) => println!("    ✓ Successfully subscribed"),
+                            Err(e) => {
+                                warn!("Failed to subscribe to {}: {}", artist_name, e);
+                                println!("    ✗ Failed to subscribe: {}", e);
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        warn!("Could not find artist: {}", artist_name);
+                        println!("    ✗ Artist not found");
+                    }
+                    Err(e) => {
+                        warn!("Search failed for {}: {}", artist_name, e);
+                        println!("    ✗ Search error: {}", e);
+                    }
+                }
+                
+                if i < to_subscribe.len() - 1 {
+                    tokio::time::sleep(std::time::Duration::from_secs_f64(delay)).await;
+                }
+            }
+        }
     } else {
-        println!("\nYouTube API integration not yet implemented");
-        println!("Run with --dry-run to see what would be synced");
+        println!("\n✓ All target artists are already subscribed!");
     }
 
     Ok(())

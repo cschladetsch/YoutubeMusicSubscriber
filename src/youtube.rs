@@ -29,6 +29,11 @@ impl YouTubeClient {
             .context("Failed to read client_secret.json. Please:\n1. Download credentials from Google Cloud Console\n2. Save as 'client_secret.json' in project root\n3. See client_secret.json.example for format")?;
 
         // Check for existing tokens first
+        let scopes = &[
+            "https://www.googleapis.com/auth/youtube.readonly",
+            "https://www.googleapis.com/auth/youtube"
+        ];
+        
         let auth = InstalledFlowAuthenticator::builder(
             secret,
             InstalledFlowReturnMethod::HTTPRedirect,
@@ -41,7 +46,7 @@ impl YouTubeClient {
         match std::fs::metadata("tokencache.json") {
             Ok(_) => {
                 info!("Found existing token cache, attempting to use cached tokens");
-                match auth.token(&["https://www.googleapis.com/auth/youtube.readonly"]).await {
+                match auth.token(scopes).await {
                     Ok(_) => info!("Successfully using cached authentication tokens"),
                     Err(e) => {
                         warn!("Cached tokens invalid, will need fresh authentication: {}", e);
@@ -102,12 +107,12 @@ impl YouTubeClient {
                 req = req.page_token(token);
             }
 
-            // Add timeout to API requests (2 minutes for authentication if needed)
+            // Add timeout to API requests (5 minutes for authentication if needed)
             let response = tokio::time::timeout(
-                Duration::from_secs(120),
+                Duration::from_secs(300),
                 req.doit()
             ).await
-                .context("API request timed out after 2 minutes. Please ensure you've completed browser authentication.")?
+                .context("API request timed out after 5 minutes. Please ensure you've completed browser authentication.")?
                 .context("Failed to fetch subscriptions from YouTube API")?;
 
             let (_, subscription_list) = response;
@@ -150,7 +155,7 @@ impl YouTubeClient {
             .max_results(10);
 
         let response = req.doit().await
-            .context("Failed to search for artist")?;
+            .context(format!("Failed to search for artist '{}'. This might indicate: 1) YouTube Data API v3 is not enabled, 2) Missing search permissions, or 3) API quota exceeded", artist_name))?;
 
         let (_, search_response) = response;
 
