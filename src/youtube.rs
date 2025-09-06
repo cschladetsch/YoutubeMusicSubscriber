@@ -28,10 +28,10 @@ impl YouTubeClient {
             .await
             .context("Failed to read client_secret.json. Please:\n1. Download credentials from Google Cloud Console\n2. Save as 'client_secret.json' in project root\n3. See client_secret.json.example for format")?;
 
-        // Check for existing tokens first
+        // Define required scopes for YouTube operations
         let scopes = &[
-            "https://www.googleapis.com/auth/youtube.readonly",
-            "https://www.googleapis.com/auth/youtube"
+            "https://www.googleapis.com/auth/youtube",
+            "https://www.googleapis.com/auth/youtube.readonly"
         ];
         
         let auth = InstalledFlowAuthenticator::builder(
@@ -153,6 +153,8 @@ impl YouTubeClient {
             .q(artist_name)
             .param("type", "channel")
             .max_results(10);
+
+        // API key authentication for search is handled differently in this library
 
         let response = req.doit().await
             .context(format!("Failed to search for artist '{}'. This might indicate: 1) YouTube Data API v3 is not enabled, 2) Missing search permissions, or 3) API quota exceeded", artist_name))?;
