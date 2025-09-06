@@ -1,417 +1,434 @@
 # Architecture Guide
 
-This document describes the architectural design and implementation details of YouTube Music Manager.
+This document describes the architectural design and implementation details of YouTube Music Manager v0.1.0 - Rust implementation.
 
 ## Overview
 
-YouTube Music Manager follows a clean, layered architecture with clear separation of concerns:
+YouTube Music Manager follows a clean, layered architecture built in Rust with direct YouTube Data API v3 integration:
 
 ```
-┌─────────────────┐
-│   CLI Layer     │  ← User Interface (ytmusic_manager.cli)
-├─────────────────┤
-│  Business Logic │  ← Sync Engine (ytmusic_manager.sync)
-├─────────────────┤
-│  Data Models    │  ← Domain Objects (ytmusic_manager.models)
-├─────────────────┤
-│ External APIs   │  ← Browser Automation (ytmusic_manager.youtube)
-└─────────────────┘
+┌─────────────────────────┐
+│     CLI Layer           │  ← User Interface (main.rs)
+├─────────────────────────┤
+│   Business Logic        │  ← Sync Engine (main.rs)
+├─────────────────────────┤
+│   API Integration       │  ← YouTube Client (youtube.rs)
+├─────────────────────────┤
+│   External Services     │  ← YouTube Data API v3 + OAuth2
+└─────────────────────────┘
 ```
 
-## Package Structure
+## Project Structure
 
-### `ytmusic_manager/` - Main Package
+### Rust Package Layout
 
 ```
-ytmusic_manager/
-├── __init__.py          # Package initialization
-├── cli.py              # Command-line interface
-├── models.py           # Data models and types
-├── sync.py             # Core synchronization logic
-└── youtube.py          # Browser automation
+youtube-music-manager/
+├── Cargo.toml              # Project configuration and dependencies
+├── src/
+│   ├── main.rs            # CLI interface and sync logic
+│   └── youtube.rs         # YouTube API client and authentication
+├── docs/
+│   ├── ARCHITECTURE.md    # This document
+│   └── DEVELOPMENT.md     # Development guide
+├── CHANGELOG.md           # Version history
+├── README.md             # User documentation
+└── artists.txt           # Sample artist configuration
 ```
 
 ### Detailed Module Responsibilities
 
-#### `models.py` - Data Models
-**Purpose**: Define the domain objects and data structures
+#### `main.rs` - CLI Interface & Business Logic
+**Purpose**: Command-line interface and core synchronization orchestration
 
-**Key Classes**:
-- `Artist` - Represents a music artist with metadata
-- `SyncAction` - Represents an action to be performed during sync
-- `SyncResult` - Contains results of a sync operation
-- `Config` - Configuration settings for the application
-
-**Design Principles**:
-- Immutable data structures using `@dataclass(frozen=True)` where appropriate
-- Type hints throughout for better IDE support and runtime checking
-- Factory methods for complex object creation (e.g., `Artist.from_line()`)
-- Property methods for computed values (e.g., `SyncResult.success_count`)
-
-#### `sync.py` - Business Logic
-**Purpose**: Orchestrate the synchronization process
-
-**Key Classes**:
-- `SyncEngine` - Main orchestrator for sync operations
-
-**Core Methods**:
-- `load_target_artists()` - Parse and validate artists file
-- `get_current_subscriptions()` - Fetch current YouTube subscriptions
-- `plan_sync()` - Determine what actions need to be taken
-- `execute_sync()` - Perform the planned actions
-
-**Design Patterns**:
-- **Command Pattern** - Each sync action is a command object
-- **Strategy Pattern** - Different action types (subscribe, unsubscribe, skip)
-- **Template Method** - `sync()` method orchestrates the full process
-
-#### `youtube.py` - External Integration
-**Purpose**: Handle browser automation and YouTube Music interaction
-
-**Key Classes**:
-- `YouTubeMusicClient` - Selenium-based browser automation
-
-**Core Methods**:
-- `search_artist()` - Find artist on YouTube Music
-- `subscribe_to_artist()` - Perform subscription action
-- `get_subscriptions()` - Extract current subscriptions
-- `_scroll_to_load_all()` - Handle infinite scroll pagination
-
-**Design Patterns**:
-- **Context Manager** - Automatic browser lifecycle management
-- **Adapter Pattern** - Adapts Selenium WebDriver to our domain
-- **Circuit Breaker** - Timeout and retry logic for stability
-
-#### `cli.py` - User Interface
-**Purpose**: Provide command-line interface and user interaction
-
-**Key Functions**:
-- `cmd_sync()` - Handle sync command
-- `cmd_list()` - Handle list command  
-- `cmd_validate()` - Handle validate command
-- `main()` - Application entry point
+**Key Components**:
+- `Cli` struct - Command-line argument parsing with Clap
+- `Commands` enum - Available CLI commands (sync, list, validate)
+- `cmd_sync()` - Main synchronization logic
+- `cmd_list()` - List current subscriptions
+- `cmd_validate()` - Validate artists file format
 
 **Design Patterns**:
 - **Command Pattern** - Each CLI command is a separate function
-- **Factory Pattern** - Argument parser creation
-- **Facade Pattern** - Simplifies complex operations for users
+- **Builder Pattern** - Clap derive macros for CLI construction
+- **Template Method** - Fixed sync algorithm with variable steps
 
-##  Data Flow
+#### `youtube.rs` - API Integration
+**Purpose**: Handle YouTube Data API v3 integration and authentication
+
+**Key Components**:
+- `YouTubeClient` - Main API client with hybrid authentication
+- `Artist` struct - Data model for artist/channel information
+- OAuth2 authentication with token caching
+- API key-based search functionality
+- Interactive authentication flow
+
+**Design Patterns**:
+- **Facade Pattern** - Simplifies complex API interactions
+- **Strategy Pattern** - Multiple authentication strategies (OAuth2 + API key)
+- **Factory Pattern** - Client construction with configuration
+
+## Data Flow
 
 ### Sync Operation Flow
 
 ```mermaid
 graph TD
     A[User runs sync] --> B[Parse CLI arguments]
-    B --> C[Load target artists from file]
-    C --> D[Initialize browser client]
-    D --> E[Get current subscriptions]
-    E --> F[Plan sync actions]
-    F --> G{Dry run mode?}
-    G -->|Yes| H[Display planned actions]
-    G -->|No| I[Execute sync actions]
-    I --> J[Display results]
-    H --> K[Exit]
-    J --> K
+    B --> C[Initialize YouTube client]
+    C --> D[Authenticate with Google]
+    D --> E[Load target artists from file]
+    E --> F[Get current subscriptions]
+    F --> G[Compare and plan actions]
+    G --> H{Dry run mode?}
+    H -->|Yes| I[Display planned actions]
+    H -->|No| J[Execute search & subscribe]
+    J --> K[Display results]
+    I --> L[Exit]
+    K --> L
 ```
 
-### Artist Processing Pipeline
+### Authentication Flow
 
 ```mermaid
-graph LR
-    A[artists.txt] --> B[Parse lines]
-    B --> C[Create Artist objects]
-    C --> D[Filter valid artists]
-    D --> E[Compare with current]
-    E --> F[Generate SyncActions]
-    F --> G[Execute actions]
-    G --> H[Update results]
+graph TD
+    A[Client initialization] --> B[Check token cache]
+    B --> C{Valid tokens?}
+    C -->|Yes| D[Use cached tokens]
+    C -->|No| E[Start OAuth2 flow]
+    E --> F[Display auth URL]
+    F --> G[User authorizes in browser]
+    G --> H[User enters code]
+    H --> I[Exchange code for tokens]
+    I --> J[Cache tokens]
+    J --> D
+    D --> K[API operations ready]
 ```
 
-##  Design Patterns Used
+## Technical Architecture
 
-### 1. Dependency Injection
-The `SyncEngine` accepts a `YouTubeMusicClient` and `Config` as dependencies:
+### Asynchronous Design
 
-```python
-class SyncEngine:
-    def __init__(self, client: YouTubeMusicClient, config: Config):
-        self.client = client
-        self.config = config
+The application uses Tokio for async/await operations:
+
+```rust
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Async main function enables concurrent API operations
+    let client = YouTubeClient::new().await?;
+    let subscriptions = client.get_my_subscriptions().await?;
+    // ...
+}
 ```
 
 **Benefits**:
-- Easy to test with mock objects
-- Flexible configuration
-- Clear dependencies
+- Non-blocking API requests
+- Better resource utilization
+- Scalable I/O operations
 
-### 2. Context Manager Pattern
-Browser lifecycle management:
+### Error Handling Strategy
 
-```python
-class YouTubeMusicClient:
-    def __enter__(self):
-        return self
+Using `anyhow` for comprehensive error handling:
+
+```rust
+pub async fn search_artist(&self, artist_name: &str) -> Result<Option<Artist>> {
+    let response = req.doit().await
+        .context(format!("Failed to search for artist '{}'", artist_name))?;
+    // ...
+}
+```
+
+**Error Handling Layers**:
+1. **API Level** - HTTP and authentication errors
+2. **Business Logic** - Search and subscription errors  
+3. **CLI Level** - User-facing error messages
+4. **System Level** - File I/O and configuration errors
+
+### Authentication Architecture
+
+#### Hybrid Authentication Approach
+
+The application uses two authentication methods:
+
+1. **OAuth2 for Subscription Operations**:
+   ```rust
+   let auth = InstalledFlowAuthenticator::builder(
+       secret,
+       InstalledFlowReturnMethod::Interactive,
+   )
+   .persist_tokens_to_disk("tokencache.json")
+   .build()
+   .await?;
+   ```
+
+2. **API Key for Search Operations**:
+   ```rust
+   let url = format!(
+       "https://www.googleapis.com/youtube/v3/search?part=snippet&q={}&key={}",
+       urlencoding::encode(artist_name),
+       api_key
+   );
+   ```
+
+#### Token Management
+
+- **Automatic Caching** - Tokens stored in `tokencache.json`
+- **Refresh Handling** - Automatic token refresh on expiry
+- **Scope Management** - Full YouTube scope for subscription operations
+
+### API Integration Patterns
+
+#### Resilient API Calls
+
+```rust
+let response = tokio::time::timeout(
+    Duration::from_secs(30),
+    req.doit()
+).await
+    .context("API request timed out")?
+    .context("Failed to execute API request")?;
+```
+
+**Features**:
+- Configurable timeouts
+- Detailed error context
+- Graceful failure handling
+
+#### Rate Limiting
+
+```rust
+// Configurable delay between operations
+if i < to_subscribe.len() - 1 {
+    tokio::time::sleep(std::time::Duration::from_secs_f64(delay)).await;
+}
+```
+
+**Benefits**:
+- Respects API quotas
+- Prevents rate limiting
+- User-configurable timing
+
+## Design Patterns Used
+
+### 1. Builder Pattern (via Derive Macros)
+
+CLI argument parsing uses derive macros:
+
+```rust
+#[derive(Parser)]
+#[command(name = "ytmusic-manager")]
+struct Cli {
+    #[arg(short, long, global = true)]
+    verbose: bool,
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.driver:
-            self.driver.quit()
+    #[command(subcommand)]
+    command: Commands,
+}
 ```
 
 **Benefits**:
-- Automatic resource cleanup
-- Exception-safe browser handling
-- Clear resource boundaries
+- Declarative configuration
+- Automatic help generation
+- Type-safe argument parsing
 
-### 3. Factory Method Pattern
-Creating objects from external data:
+### 2. Result Pattern
 
-```python
-class Artist:
-    @classmethod
-    def from_line(cls, line: str) -> "Artist":
-        if "|" in line:
-            parts = line.split("|")
-            name = parts[0].strip()
-            tags = [tag.strip() for tag in parts[1:] if tag.strip()]
-            return cls(name=name, tags=tags)
-        else:
-            return cls(name=line.strip())
+Comprehensive error handling with `Result<T, E>`:
+
+```rust
+pub async fn subscribe_to_channel(&self, channel_id: &str) -> Result<()> {
+    let subscription = Subscription { /* ... */ };
+    self.youtube.subscriptions().insert(subscription)
+        .add_part("snippet")
+        .doit()
+        .await
+        .context("Failed to subscribe to channel")?;
+    Ok(())
+}
 ```
 
 **Benefits**:
-- Encapsulates object creation logic
-- Validates input during creation
-- Provides multiple creation paths
+- Explicit error handling
+- Composable error propagation
+- No silent failures
 
-### 4. Command Pattern
-Sync actions as command objects:
+### 3. Factory Pattern
 
-```python
-@dataclass
-class SyncAction:
-    artist: Artist
-    action: SyncActionType  
-    reason: str
+Client initialization with configuration:
+
+```rust
+impl YouTubeClient {
+    pub async fn new() -> Result<Self> {
+        let secret = oauth2::read_application_secret("client_secret.json").await?;
+        let auth = InstalledFlowAuthenticator::builder(/* ... */).build().await?;
+        let api_key = std::fs::read_to_string("api.key").ok();
+        
+        Ok(Self { youtube, api_key })
+    }
+}
 ```
 
 **Benefits**:
-- Actions can be queued, logged, and undone
-- Easy to add new action types
-- Clear separation of planning and execution
+- Encapsulated construction logic
+- Configuration validation
+- Resource initialization
 
-### 5. Template Method Pattern
-The sync process follows a fixed algorithm:
+### 4. Strategy Pattern
 
-```python
-def sync(self) -> SyncResult:
-    # Template method - fixed algorithm, variable steps
-    target_artists = self.load_target_artists()
-    current_subscriptions = self.get_current_subscriptions()
-    actions = self.plan_sync(target_artists, current_subscriptions)
-    return self.execute_sync(actions)
+Multiple authentication strategies:
+
+```rust
+// API key strategy for search
+if let Some(ref api_key) = self.api_key {
+    let client = reqwest::Client::new();
+    let response = client.get(&url).send().await?;
+    // ...
+}
+
+// OAuth strategy for subscriptions  
+let req = self.youtube.subscriptions().insert(subscription);
+let response = req.doit().await?;
 ```
 
 **Benefits**:
-- Consistent process flow
-- Extensible individual steps
-- Easy to add hooks and validation
+- Flexible authentication approaches
+- Fallback mechanisms
+- Service-specific optimizations
 
-##  Error Handling Strategy
-
-### Layered Error Handling
-
-1. **Input Validation** - At the data model level
-2. **Business Logic Errors** - In the sync engine
-3. **External Service Errors** - In the YouTube client
-4. **User Interface Errors** - In the CLI layer
-
-### Error Types
-
-```python
-# Domain-specific errors
-class ArtistFileNotFoundError(Exception): pass
-class BrowserAutomationError(Exception): pass
-class SubscriptionError(Exception): pass
-
-# Generic errors are caught and wrapped
-try:
-    result = self.client.subscribe_to_artist(artist)
-except Exception as e:
-    logger.error(f"Subscription failed: {e}")
-    result.errors.append(f"Failed to subscribe to {artist.name}: {e}")
-```
-
-### Recovery Strategies
-
-- **Graceful Degradation** - Continue processing other artists if one fails
-- **Retry Logic** - Automatic retries with exponential backoff
-- **User Notification** - Clear error messages with suggested actions
-- **Logging** - Detailed logs for troubleshooting
-
-##  Testing Architecture
-
-### Test Structure
-
-```
-tests/
-├── test_models.py      # Unit tests for data models
-├── test_sync.py        # Unit tests for sync engine
-├── test_youtube.py     # Unit tests for browser client (mocked)
-├── test_main.py        # Unit tests for CLI interface
-├── test_integration.py # Integration tests
-└── conftest.py         # Shared test fixtures
-```
-
-### Testing Strategies
-
-#### 1. Unit Tests
-- **Models** - Test data validation and business rules
-- **Sync Engine** - Test planning and execution logic with mocked dependencies
-- **YouTube Client** - Test browser automation logic with mocked WebDriver
-
-#### 2. Integration Tests
-- **End-to-End Workflows** - Test complete sync processes
-- **File Operations** - Test real file reading and writing
-- **Error Scenarios** - Test error handling across layers
-
-#### 3. Test Doubles
-
-**Mocks** - For external dependencies:
-```python
-@patch('ytmusic_manager.youtube.webdriver.Chrome')
-def test_client_initialization(self, mock_chrome):
-    client = YouTubeMusicClient()
-    mock_chrome.assert_called_once()
-```
-
-**Fixtures** - For common test data:
-```python
-@pytest.fixture
-def sample_artists():
-    return [
-        Artist(name="Artist 1"),
-        Artist(name="Artist 2", tags=["rock"])
-    ]
-```
-
-**Factories** - For dynamic test data creation:
-```python
-def create_sync_result(success_count=0, error_count=0):
-    result = SyncResult()
-    result.actions_taken = [mock_action] * success_count
-    result.errors = ["error"] * error_count
-    return result
-```
-
-##  Performance Considerations
+## Performance Considerations
 
 ### Optimization Strategies
 
-#### 1. Browser Performance
-- **Headless Mode** - 30-50% faster than visible browser
-- **Connection Reuse** - Single browser session for multiple operations
-- **Selective Loading** - Disable images and unnecessary resources
+#### 1. Async I/O
+- **Non-blocking Operations** - All API calls are async
+- **Concurrent Processing** - Multiple operations can run concurrently
+- **Resource Efficiency** - Better CPU and memory utilization
 
-#### 2. Rate Limiting
-- **Configurable Delays** - Balance speed vs. detection risk
-- **Exponential Backoff** - Handle rate limiting gracefully
-- **Batch Operations** - Group similar actions when possible
+#### 2. Smart Caching
+- **Token Caching** - Avoid repeated authentication flows
+- **Response Caching** - Future: Cache search results
+- **Configuration Caching** - Parse files once per run
 
-#### 3. Memory Management
-- **Context Managers** - Automatic resource cleanup
-- **Generator Patterns** - Stream large datasets
-- **Explicit Cleanup** - Close browser sessions properly
+#### 3. Rate Limiting
+- **Configurable Delays** - User can adjust timing for their needs
+- **Respectful API Usage** - Prevent quota exhaustion
+- **Batch Operations** - Future: Group similar operations
 
-### Scalability Considerations
+### Memory Management
 
-#### Current Limitations
-- **Sequential Processing** - One action at a time
-- **Single Session** - One browser instance only
-- **Memory Usage** - Selenium overhead
+Rust's ownership system provides:
+- **Memory Safety** - No manual memory management
+- **Zero-Cost Abstractions** - High-level patterns without runtime overhead
+- **Resource Management** - Automatic cleanup via RAII
 
-#### Future Improvements
-- **Parallel Processing** - Multiple browser sessions
-- **Connection Pooling** - Reuse browser instances
-- **Batch Operations** - Group similar actions
-- **Asynchronous Operations** - Non-blocking I/O
-
-##  Extension Points
+## Extension Points
 
 ### Adding New Commands
 
-1. **Create command function** in `cli.py`:
-```python
-def cmd_export(args):
-    """Export subscriptions in various formats."""
-    # Implementation here
-    return 0
-```
+1. **Add to Commands enum**:
+   ```rust
+   #[derive(Subcommand)]
+   enum Commands {
+       // existing commands...
+       Export {
+           #[arg(short, long)]
+           format: String,
+       },
+   }
+   ```
 
-2. **Add parser configuration**:
-```python
-export_parser = subparsers.add_parser('export', help='Export subscriptions')
-export_parser.set_defaults(func=cmd_export)
-```
+2. **Add command handler**:
+   ```rust
+   Commands::Export { format } => {
+       cmd_export(&format).await
+   }
+   ```
 
-### Adding New Action Types
+### Adding New Authentication Methods
 
-1. **Extend SyncActionType enum**:
-```python
-class SyncActionType(Enum):
-    SUBSCRIBE = "subscribe"
-    UNSUBSCRIBE = "unsubscribe"  
-    SKIP = "skip"
-    UPDATE = "update"  # New action type
-```
-
-2. **Add handling in SyncEngine**:
-```python
-elif planned_action.action == SyncActionType.UPDATE:
-    # Handle update logic
-    pass
-```
+1. **Extend authentication logic**:
+   ```rust
+   if let Some(service_account) = load_service_account()? {
+       // Service account authentication
+   } else if let Some(api_key) = &self.api_key {
+       // API key authentication
+   } else {
+       // OAuth2 authentication
+   }
+   ```
 
 ### Adding New Data Sources
 
-1. **Extend Artist.from_source() factory**:
-```python
-@classmethod
-def from_json(cls, data: dict) -> "Artist":
-    return cls(
-        name=data["name"],
-        tags=data.get("tags", []),
-        # Additional fields
-    )
-```
+1. **Create new parser functions**:
+   ```rust
+   pub fn parse_json_file(content: &str) -> Result<Vec<String>> {
+       let data: serde_json::Value = serde_json::from_str(content)?;
+       // Parse JSON format
+   }
+   ```
 
-2. **Add new loader in SyncEngine**:
-```python
-def load_from_spotify_playlist(self, playlist_url: str) -> List[Artist]:
-    # Implementation here
-    pass
-```
+2. **Extend file loading logic**:
+   ```rust
+   let artists = match file_extension {
+       "txt" => parse_artists_file(&content)?,
+       "json" => parse_json_file(&content)?,
+       "csv" => parse_csv_file(&content)?,
+       _ => return Err(anyhow!("Unsupported file format")),
+   };
+   ```
 
-##  Best Practices
+## Security Considerations
+
+### Authentication Security
+- **OAuth2 PKCE Flow** - Secure authentication without client secrets
+- **Token Storage** - Local file system with appropriate permissions
+- **Scope Limitation** - Request only necessary permissions
+- **No Credential Hardcoding** - All secrets stored in external files
+
+### API Security
+- **Rate Limiting** - Prevents abuse and quota exhaustion
+- **Input Validation** - All user input validated and sanitized
+- **Error Information** - Sensitive information not exposed in errors
+- **Timeout Handling** - Prevents hanging operations
+
+### File System Security
+- **Gitignore Protection** - Credential files excluded from version control
+- **Path Validation** - File paths validated to prevent directory traversal
+- **Safe Defaults** - Dry-run mode enabled by default
+
+## Testing Strategy
+
+### Current Testing Approach
+- **Integration Testing** - Real API calls with actual credentials
+- **Manual Testing** - Interactive testing of authentication flows
+- **Error Path Testing** - Testing failure scenarios and recovery
+
+### Future Testing Improvements
+- **Unit Tests** - Mock-based testing of individual components
+- **Property-Based Testing** - Randomized input testing
+- **Performance Testing** - API call timing and resource usage
+- **Security Testing** - Authentication and authorization validation
+
+## Best Practices
 
 ### Code Quality
-- **Type Hints** - All public APIs have type annotations
-- **Docstrings** - All classes and public methods documented
-- **Error Messages** - Clear, actionable error descriptions
+- **Type Safety** - Comprehensive type system usage
+- **Error Handling** - All errors properly handled and contextualized
+- **Documentation** - Inline documentation for complex logic
 - **Logging** - Structured logging with appropriate levels
 
-### Security
-- **Input Validation** - All external input validated
-- **Safe Defaults** - Dry-run mode enabled by default
-- **Rate Limiting** - Prevent abuse and detection
-- **No Credential Storage** - Uses existing browser sessions
+### API Usage
+- **Respectful Rate Limiting** - Conservative API usage patterns
+- **Graceful Degradation** - Fallback options when services fail  
+- **Comprehensive Error Handling** - Detailed error reporting
+- **Resource Cleanup** - Proper cleanup of connections and resources
 
 ### Maintainability
-- **Single Responsibility** - Each class has one clear purpose
-- **Dependency Injection** - Easy to test and modify
-- **Configuration** - Externalized and overridable
-- **Extensibility** - Clear extension points for new features
+- **Clear Separation** - Distinct responsibilities for each module
+- **Minimal Dependencies** - Only essential external crates
+- **Configuration Externalization** - All settings in external files
+- **Version Compatibility** - Stable API usage patterns
 
 ---
 
-This architecture provides a solid foundation for the YouTube Music Manager while remaining flexible enough to accommodate future enhancements and requirements.
+This architecture provides a robust foundation for the YouTube Music Manager while maintaining flexibility for future enhancements. The Rust implementation offers performance, safety, and maintainability improvements over previous approaches.
