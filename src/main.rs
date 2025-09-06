@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Err(e) => {
-            error!("Command failed: {}", e);
+            error!("Command failed: {e}");
             std::process::exit(1);
         }
     }
@@ -181,7 +181,7 @@ async fn cmd_sync(
     if !already_subscribed.is_empty() {
         println!("\nAlready SUBSCRIBED to:");
         for artist in &already_subscribed {
-            println!("  ✓ {}", artist);
+            println!("  ✓ {artist}");
         }
     }
 
@@ -189,7 +189,7 @@ async fn cmd_sync(
         if dry_run {
             println!("\nDRY RUN - Would SUBSCRIBE to:");
             for artist in &to_subscribe {
-                println!("  + {}", artist);
+                println!("  + {artist}");
             }
         } else {
             println!("\nSUBSCRIBING to {} artists:", to_subscribe.len());
@@ -204,18 +204,18 @@ async fn cmd_sync(
                         match client.subscribe_to_channel(&artist.channel_id).await {
                             Ok(()) => println!("    ✓ Successfully subscribed"),
                             Err(e) => {
-                                warn!("Failed to subscribe to {}: {}", artist_name, e);
-                                println!("    ✗ Failed to subscribe: {}", e);
+                                warn!("Failed to subscribe to {artist_name}: {e}");
+                                println!("    ✗ Failed to subscribe: {e}");
                             }
                         }
                     }
                     Ok(None) => {
-                        warn!("Could not find artist: {}", artist_name);
+                        warn!("Could not find artist: {artist_name}");
                         println!("    ✗ Artist not found");
                     }
                     Err(e) => {
-                        warn!("Search failed for {}: {}", artist_name, e);
-                        println!("    ✗ Search error: {}", e);
+                        warn!("Search failed for {artist_name}: {e}");
+                        println!("    ✗ Search error: {e}");
                     }
                 }
                 
@@ -300,7 +300,7 @@ async fn cmd_validate(artists_file: &PathBuf, verbose: bool) -> anyhow::Result<(
             Ok(())
         }
         Err(e) => {
-            error!("Validation failed: {}", e);
+            error!("Validation failed: {e}");
             anyhow::bail!("File validation failed");
         }
     }

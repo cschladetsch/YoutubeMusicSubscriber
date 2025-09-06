@@ -55,7 +55,7 @@ impl YouTubeClient {
         match auth.token(scopes).await {
             Ok(_) => info!("Successfully obtained authentication tokens with full YouTube access"),
             Err(e) => {
-                warn!("Authentication failed: {}", e);
+                warn!("Authentication failed: {e}");
                 println!("\n⚠️  Authentication required!");
                 println!("Please visit the URL shown below in your browser to authenticate:");
                 println!("After authentication, the app will continue automatically.\n");
@@ -175,7 +175,7 @@ impl YouTubeClient {
     }
 
     pub async fn search_artist(&self, artist_name: &str) -> Result<Option<Artist>> {
-        info!("Searching for artist: {}", artist_name);
+        info!("Searching for artist: {artist_name}");
         
         // Try using API key for search operations
         if let Some(ref api_key) = self.api_key {
@@ -208,7 +208,7 @@ impl YouTubeClient {
             .max_results(10);
 
         let response = req.doit().await
-            .context(format!("Failed to search for artist '{}'. This might indicate: 1) YouTube Data API v3 is not enabled, 2) Missing search permissions, or 3) API quota exceeded", artist_name))?;
+            .context(format!("Failed to search for artist '{artist_name}'. This might indicate: 1) YouTube Data API v3 is not enabled, 2) Missing search permissions, or 3) API quota exceeded"))?;
 
         let (_, search_response) = response;
         self.parse_search_results(search_response, artist_name)
@@ -244,7 +244,7 @@ impl YouTubeClient {
             }
         }
 
-        warn!("No matching artist found for: {}", artist_name);
+        warn!("No matching artist found for: {artist_name}");
         Ok(None)
     }
 
@@ -274,12 +274,12 @@ impl YouTubeClient {
             }
         }
 
-        warn!("No matching artist found for: {}", artist_name);
+        warn!("No matching artist found for: {artist_name}");
         Ok(None)
     }
 
     pub async fn subscribe_to_channel(&self, channel_id: &str) -> Result<()> {
-        info!("Subscribing to channel: {}", channel_id);
+        info!("Subscribing to channel: {channel_id}");
 
         let subscription = Subscription {
             snippet: Some(google_youtube3::api::SubscriptionSnippet {
@@ -299,19 +299,20 @@ impl YouTubeClient {
         req.doit().await
             .context("Failed to subscribe to channel")?;
 
-        info!("Successfully subscribed to channel: {}", channel_id);
+        info!("Successfully subscribed to channel: {channel_id}");
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn unsubscribe_from_channel(&self, subscription_id: &str) -> Result<()> {
-        info!("Unsubscribing from subscription: {}", subscription_id);
+        info!("Unsubscribing from subscription: {subscription_id}");
 
         let req = self.youtube.subscriptions().delete(subscription_id);
         
         req.doit().await
             .context("Failed to unsubscribe from channel")?;
 
-        info!("Successfully unsubscribed from: {}", subscription_id);
+        info!("Successfully unsubscribed from: {subscription_id}");
         Ok(())
     }
 }
