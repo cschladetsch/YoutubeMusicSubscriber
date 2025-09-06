@@ -404,8 +404,7 @@ async fn cmd_validate(artists_file: &PathBuf, verbose: bool) -> anyhow::Result<(
                 }
             }
 
-            println!("\n{}", "VALIDATION RESULTS:".bright_cyan().bold());
-            println!("{} {}", "Valid artists:".bright_green(), artists.len().to_string().bright_white().bold());
+            println!("\n{} {}", "Valid artists:".bright_green(), artists.len().to_string().bright_white().bold());
             println!("{} {}", "Errors:".bright_green(), "0".bright_green().bold());
             println!("{}", "All entries are valid!".bright_green().bold());
 
