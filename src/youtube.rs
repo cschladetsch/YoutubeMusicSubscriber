@@ -356,17 +356,18 @@ impl YouTubeClient {
         let has_more = offset + page_channels.len() < total_channels;
         let mut artists = Vec::new();
         
-        println!("Fetching details for {} channels (page {} of approx {})...", 
-                 page_channels.len(), 
-                 (offset / limit) + 1,
-                 (total_channels + limit - 1) / limit);
+        use colored::*;
+        println!("{}", format!("Fetching details for {page_channels_len} channels (page {page_num} of approx {total_pages})...", 
+                 page_channels_len = page_channels.len(), 
+                 page_num = (offset / limit) + 1,
+                 total_pages = (total_channels + limit - 1) / limit).bright_black());
         info!("Fetching real details for {} channels (page {} of approx {})", 
               page_channels.len(), 
               (offset / limit) + 1,
               (total_channels + limit - 1) / limit);
         
         for (i, channel_name) in page_channels.iter().enumerate() {
-            print!("  [{}/{}] {}...", i + 1, page_channels.len(), channel_name);
+            print!("{}", format!("  [{current}/{total}] {channel_name}...", current = i + 1, total = page_channels.len(), channel_name = channel_name).bright_black());
             std::io::Write::flush(&mut std::io::stdout()).unwrap();
             info!("Processing channel: {channel_name}");
             

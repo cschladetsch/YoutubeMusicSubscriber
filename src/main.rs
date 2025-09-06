@@ -254,17 +254,17 @@ async fn cmd_sync(
             println!("\n{} {} {}", "SUBSCRIBING to".bright_blue().bold(), to_subscribe.len().to_string().bright_white().bold(), "artists:".bright_blue().bold());
             
             for (i, artist_name) in to_subscribe.iter().enumerate() {
-                println!("  {} {} {}", format!("[{}/{}]", i + 1, to_subscribe.len()).bright_blue().bold(), "Searching for:".bright_blue(), artist_name.bright_white().bold());
+                println!("  {} {} {}", format!("[{current}/{total}]", current = i + 1, total = to_subscribe.len()).bright_black(), "Searching for:".bright_black(), artist_name.bright_white().bold());
                 
                 match client.search_artist(artist_name).await {
                     Ok(Some(artist)) => {
-                        println!("    {} {} {}", "Found:".bright_green(), artist.name.bright_white().bold(), format!("({})", artist.channel_id).bright_black());
+                        println!("    {} {} {}", "Found:".bright_green(), artist.name.bright_white().bold(), format!("({channel_id})", channel_id = artist.channel_id).bright_black());
                         
                         match client.subscribe_to_channel(&artist.channel_id).await {
                             Ok(()) => println!("    {} {}", "✓".bright_green().bold(), "Successfully subscribed".bright_green()),
                             Err(e) => {
                                 warn!("Failed to subscribe to {artist_name}: {e}");
-                                println!("    {} {}: {}", "✗".bright_red().bold(), "Failed to subscribe".bright_red(), e.to_string().red());
+                                println!("    {} {}: {error}", "✗".bright_red().bold(), "Failed to subscribe".bright_red(), error = e.to_string().red());
                             }
                         }
                     }
@@ -274,7 +274,7 @@ async fn cmd_sync(
                     }
                     Err(e) => {
                         warn!("Search failed for {artist_name}: {e}");
-                        println!("    {} {}: {}", "✗".bright_red().bold(), "Search error".bright_red(), e.to_string().red());
+                        println!("    {} {}: {error}", "✗".bright_red().bold(), "Search error".bright_red(), error = e.to_string().red());
                     }
                 }
                 
@@ -325,9 +325,9 @@ async fn cmd_list(
         
         for artist in &subscriptions {
             let info = match (&artist.description, artist.subscriber_count) {
-                (Some(desc), Some(count)) => format!("({desc} - {} subs)", format_subscriber_count(count)),
+                (Some(desc), Some(count)) => format!("({desc} - {subs} subs)", subs = format_subscriber_count(count)),
                 (Some(desc), None) => format!("({desc})"),
-                (None, Some(count)) => format!("({} subs)", format_subscriber_count(count)),
+                (None, Some(count)) => format!("({subs} subs)", subs = format_subscriber_count(count)),
                 (None, None) => String::new(),
             };
             println!("{} {} {}", "•".bright_blue(), artist.name.bright_white(), info.bright_black());
@@ -359,10 +359,10 @@ async fn cmd_list(
         println!(); // Add spacing
     }
     
-    println!("\n{}/{} {}", 
-             all_subscriptions.len().to_string().bright_white().bold(),
-             total_channels.to_string().bright_white().bold(),
-             "Subscriptions shown".bright_green());
+    println!("\n{found}/{total} {text}", 
+             found = all_subscriptions.len().to_string().bright_white().bold(),
+             total = total_channels.to_string().bright_white().bold(),
+             text = "Subscriptions shown".bright_green());
     
     if let Some(output_file) = output {
         let content = all_subscriptions.iter()
@@ -397,7 +397,7 @@ async fn cmd_validate(artists_file: &PathBuf, verbose: bool) -> anyhow::Result<(
 
                     // Parse tags if present
                     if let Some((name, tags)) = line.split_once('|') {
-                        println!("{} {}: {} {}", "VALID Line".bright_green(), (line_num + 1).to_string().bright_white().bold(), name.trim().bright_white().bold(), format!("(tags: {})", tags.trim()).bright_black());
+                        println!("{} {}: {} {}", "VALID Line".bright_green(), (line_num + 1).to_string().bright_white().bold(), name.trim().bright_white().bold(), format!("(tags: {tags})", tags = tags.trim()).bright_black());
                     } else {
                         println!("{} {}: {}", "VALID Line".bright_green(), (line_num + 1).to_string().bright_white().bold(), line.bright_white().bold());
                     }
