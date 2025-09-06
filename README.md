@@ -11,6 +11,17 @@ A professional CLI tool for managing YouTube Music artist subscriptions using th
 
 YouTube Music Manager allows you to synchronize your YouTube Music subscriptions with a unified configuration file. It compares your target artist list against your current subscriptions and automatically manages the differences - subscribing to new artists and optionally unsubscribing from those not in your list.
 
+```mermaid
+flowchart LR
+    A[config.json] --> B[YouTube Music Manager]
+    C[Current Subscriptions] --> B
+    B --> D{Compare Artists}
+    D --> E[Subscribe to New Artists]
+    D --> F[Optional: Unsubscribe from Unlisted]
+    E --> G[Updated Subscriptions]
+    F --> G
+```
+
 ## Key Features
 
 - **Smart Synchronization** - Compare target artists with current subscriptions
@@ -332,6 +343,32 @@ Logs are written to console with configurable levels:
 - **API Calls**: Request/response logging with quota tracking
 
 ## Important Notes
+
+### Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant App as YouTube Manager
+    participant G as Google OAuth
+    participant Y as YouTube API
+    
+    U->>App: Run sync command
+    App->>App: Check token cache
+    alt Token cached and valid
+        App->>Y: Use cached token
+    else No valid token
+        App->>G: Request OAuth URL
+        App->>U: Display auth URL
+        U->>G: Authorize in browser
+        G->>U: Provide auth code
+        U->>App: Enter auth code
+        App->>G: Exchange code for token
+        App->>App: Cache token
+    end
+    App->>Y: Search for artists
+    App->>Y: Subscribe to channels
+```
 
 ### Authentication & Setup
 

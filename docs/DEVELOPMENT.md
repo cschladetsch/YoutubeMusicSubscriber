@@ -39,6 +39,33 @@ cargo run -- --help
 
 ### Google Cloud Setup
 
+#### Setup Process Flow
+
+```mermaid
+flowchart TD
+    A[Google Cloud Console] --> B[Create/Select Project]
+    B --> C[Enable YouTube Data API v3]
+    C --> D[Create OAuth2 Credentials]
+    D --> E[Add Test Users]
+    E --> F[Create API Key - Optional]
+    F --> G[Configure config.json]
+    
+    D --> D1[Desktop Application]
+    D --> D2[Download JSON]
+    
+    E --> E1[OAuth Consent Screen]
+    E --> E2[Add Your Email]
+    
+    G --> G1[Copy OAuth2 Section]
+    G --> G2[Add API Key]
+    G --> G3[Add Artists List]
+    
+    style A fill:#4285f4,color:#fff
+    style C fill:#34a853,color:#fff
+    style D fill:#ea4335,color:#fff
+    style F fill:#fbbc04,color:#000
+```
+
 #### 1. Create Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
@@ -111,6 +138,28 @@ cargo build --release
 ```
 
 ## Development Workflow
+
+### Development Process Flow
+
+```mermaid
+flowchart TD
+    A[Create Feature Branch] --> B[Make Changes]
+    B --> C[Build & Test]
+    C --> D{Tests Pass?}
+    D -->|No| B
+    D -->|Yes| E[Code Quality Check]
+    E --> F[cargo fmt]
+    F --> G[cargo clippy]
+    G --> H{Quality OK?}
+    H -->|No| B
+    H -->|Yes| I[Commit Changes]
+    I --> J[Push to Remote]
+    J --> K[Create Pull Request]
+    
+    L[Continuous Integration] --> M[Automated Tests]
+    M --> N[Code Review]
+    N --> O[Merge to Main]
+```
 
 ### Making Changes
 

@@ -6,42 +6,51 @@ This document describes the architectural design and implementation details of Y
 
 YouTube Music Manager follows a clean, layered architecture built in Rust with unified configuration management, intelligent caching, and direct YouTube Data API v3 integration:
 
-```
-┌─────────────────────────┐
-│     CLI Layer           │  ← User Interface (main.rs)
-├─────────────────────────┤
-│   Configuration         │  ← Unified config.json Management
-├─────────────────────────┤
-│   Caching Layer         │  ← SQLite Database (youtube.rs)
-├─────────────────────────┤
-│   Business Logic        │  ← Sync Engine (main.rs)
-├─────────────────────────┤
-│   API Integration       │  ← YouTube Client (youtube.rs)
-├─────────────────────────┤
-│   External Services     │  ← YouTube Data API v3 + OAuth2
-└─────────────────────────┘
+```mermaid
+graph TD
+    A[CLI Layer<br/>main.rs] --> B[Configuration Layer<br/>Unified config.json]
+    B --> C[Caching Layer<br/>SQLite Database]
+    C --> D[Business Logic<br/>Sync Engine]
+    D --> E[API Integration<br/>YouTube Client]
+    E --> F[External Services<br/>YouTube Data API v3 + OAuth2]
+    
+    A --> |User Commands| G[sync, list, validate]
+    B --> |Settings| H[Google Config, Database Config, Artists]
+    C --> |Cache Management| I[7-day expiry, Artist data]
+    D --> |Operations| J[Compare, Subscribe, Unsubscribe]
+    E --> |Authentication| K[OAuth2, API Key]
 ```
 
 ## Project Structure
 
 ### Rust Package Layout
 
-```
-youtube-music-manager/
-├── Cargo.toml              # Project configuration and dependencies
-├── config.example.json     # Example configuration file
-├── config.json            # User configuration (created from example)
-├── artist_cache.db        # SQLite cache database (auto-created)
-├── tokencache.json        # OAuth2 token cache (auto-created)
-├── src/
-│   ├── main.rs            # CLI interface and sync logic
-│   └── youtube.rs         # YouTube API client, caching, and authentication
-├── docs/
-│   ├── ARCHITECTURE.md    # This document
-│   └── DEVELOPMENT.md     # Development guide
-├── CHANGELOG.md           # Version history
-├── README.md             # User documentation
-└── artists.txt           # Optional external artist file
+```mermaid
+graph LR
+    A[youtube-music-manager/] --> B[Cargo.toml]
+    A --> C[config.example.json]
+    A --> D[config.json]
+    A --> E[artist_cache.db]
+    A --> F[tokencache.json]
+    A --> G[src/]
+    A --> H[docs/]
+    A --> I[README.md]
+    A --> J[CHANGELOG.md]
+    A --> K[artists.txt]
+    
+    G --> L[main.rs]
+    G --> M[youtube.rs]
+    
+    H --> N[ARCHITECTURE.md]
+    H --> O[DEVELOPMENT.md]
+    
+    style B fill:#e1f5fe
+    style C fill:#e1f5fe
+    style D fill:#fff3e0
+    style E fill:#f3e5f5
+    style F fill:#f3e5f5
+    style L fill:#e8f5e8
+    style M fill:#e8f5e8
 ```
 
 ### Detailed Module Responsibilities
@@ -218,6 +227,18 @@ let secret = oauth2::read_application_secret(temp_path).await?;
 
 #### SQLite Database Design
 
+```mermaid
+erDiagram
+    artist_cache {
+        string search_name PK
+        string name
+        string channel_id
+        integer subscriber_count
+        string description
+        timestamp cached_at
+    }
+```
+
 ```sql
 CREATE TABLE artist_cache (
     search_name TEXT PRIMARY KEY,
@@ -227,6 +248,23 @@ CREATE TABLE artist_cache (
     description TEXT,
     cached_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+```
+
+#### Cache Strategy Flow
+
+```mermaid
+flowchart TD
+    A[API Request for Artist] --> B{Check SQLite Cache}
+    B -->|Hit + Valid| C[Return Cached Data]
+    B -->|Hit + Expired| D[Fetch from YouTube API]
+    B -->|Miss| D
+    D --> E[Update Cache]
+    E --> F[Return Fresh Data]
+    C --> G[Use Data]
+    F --> G
+    
+    H[--update-artist-info] --> I[Force Cache Bypass]
+    I --> D
 ```
 
 **Cache Strategy**:
