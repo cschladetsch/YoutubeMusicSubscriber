@@ -1,6 +1,8 @@
 # API credentials
 api.key
 oauth.json
+client_*.json
+tokencache.json
 
 # Virtual environment
 venv/
@@ -84,3 +86,8 @@ Thumbs.db
 # Editor config is included in repo
 # .editorconfig
 
+
+
+# Added by cargo
+
+/target

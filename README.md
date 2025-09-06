@@ -1,6 +1,13 @@
 # YouTube Music Manager
 
-A professional CLI tool for managing YouTube Music artist subscriptions through automated browser interaction.
+A professional CLI tool for managing YouTube Music artist subscriptions using the YouTube Data API v3.
+
+## SECURITY NOTICE
+
+**If you cloned this repository before the security fix:**
+1. The exposed OAuth2 credentials have been removed
+2. **You MUST revoke the old credentials** at [Google Cloud Console](https://console.cloud.google.com/)
+3. **Generate new credentials** following the setup instructions below
 
 ## Overview
 
@@ -20,9 +27,33 @@ YouTube Music Manager allows you to synchronize your YouTube Music subscriptions
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- Chrome or Chromium browser
-- Active YouTube Music account (logged in to Chrome)
+- Rust (latest stable version)
+- Google Cloud Console project with YouTube Data API v3 enabled
+- OAuth2 credentials (client_secret.json)
+- Active YouTube account
+
+### Setup Google Cloud Credentials
+
+1. **Create a Google Cloud Console project**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing one
+   - Enable the **YouTube Data API v3**
+
+2. **Create OAuth2 credentials**:
+   - Go to **APIs & Services** > **Credentials**
+   - Click **Create Credentials** > **OAuth 2.0 Client IDs**
+   - Choose **Desktop application**
+   - Download the JSON file
+
+3. **Setup credentials**:
+   ```bash
+   # Copy downloaded file to project root
+   cp ~/Downloads/client_secret_*.json client_secret.json
+   
+   # Or create from template
+   cp client_secret.json.example client_secret.json
+   # Edit client_secret.json with your actual credentials
+   ```
 
 ### Install from Source
 
@@ -31,24 +62,20 @@ YouTube Music Manager allows you to synchronize your YouTube Music subscriptions
 git clone git@github.com:cschladetsch/YoutubeMusicSubscriber.git
 cd youtube-music-manager
 
-# Create virtual environment (recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install the package
-pip install -e .
+# Build the project
+cargo build --release
 ```
 
 ### Verify Installation
 
 ```bash
 # Test the installation
-ytmusic-manager --help
+cargo run -- --help
 
 # Validate your artists file
-ytmusic-manager validate
+cargo run -- validate
 
-# Alternative: Use the convenience script (automatically activates venv)
+# Alternative: Use the convenience script
 ./run --help
 ```
 
