@@ -4,7 +4,7 @@ A professional CLI tool for managing YouTube Music artist subscriptions using th
 
 ## Demo
 
-[Demo1](resources/demo.txt)
+[Demo1](resources/demo1.txt)
 
 
 ## Overview

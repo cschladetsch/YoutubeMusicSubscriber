@@ -31,11 +31,12 @@ pub struct DatabaseConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingsConfig {
-    search_delay_ms: u64,
-    items_per_page: usize,
-    request_timeout_seconds: u64,
-    default_log_level: String,
-    token_cache_file: String,
+    pub search_delay_ms: u64,
+    pub items_per_page: usize,
+    pub request_timeout_seconds: u64,
+    pub search_timeout_seconds: u64,
+    pub default_log_level: String,
+    pub token_cache_file: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -393,7 +394,7 @@ impl YouTubeClient {
             
             // Search for the channel to get its ID with timeout
             let search_timeout = tokio::time::timeout(
-                std::time::Duration::from_secs(3),
+                std::time::Duration::from_secs(self.config.settings.search_timeout_seconds),
                 self.search_artist(channel_name)
             ).await;
 
@@ -439,7 +440,7 @@ impl YouTubeClient {
                 Err(_) => {
                     use colored::*;
                     println!(" {}", "too long ⏱".bright_red());
-                    info!("Search timeout for {channel_name} (> 3 seconds)");
+                    info!("Search timeout for {channel_name} (> {} seconds)", self.config.settings.search_timeout_seconds);
                 }
             }
             

@@ -46,6 +46,7 @@
     "search_delay_ms": 100,
     "items_per_page": 50,
     "request_timeout_seconds": 30,
+    "search_timeout_seconds": 3,
     "default_log_level": "warn",
     "token_cache_file": "tokencache.json"
   }
