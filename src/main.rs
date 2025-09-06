@@ -314,8 +314,7 @@ async fn cmd_list(
         
         // Display current batch
         if offset == 0 {
-            println!("\n{}", "CURRENT SUBSCRIPTIONS".bright_cyan().bold());
-            println!("{}", "==================================================".bright_cyan());
+            println!();
         }
         
         for artist in &subscriptions {
