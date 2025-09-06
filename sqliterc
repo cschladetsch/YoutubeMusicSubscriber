@@ -1,0 +1,4 @@
+-- .sqliterc (in your project folder)
+CREATE VIEW IF NOT EXISTS ac AS SELECT * FROM artist_cache;
+.mode column
+.headers on

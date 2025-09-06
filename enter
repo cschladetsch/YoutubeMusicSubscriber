@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Add to ~/.bashrc or ~/.zshrc
+alias lc='litecli artist_cache.db --no-pager'
+
+\ns top "SELECT * FROM ac ORDER BY subscriber_count DESC LIMIT 10"
+\ns search "SELECT * FROM ac WHERE artist_name LIKE"
+\ns count "SELECT COUNT(*) FROM ac"
+
+
+
