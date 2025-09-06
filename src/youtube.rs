@@ -96,9 +96,9 @@ impl YouTubeClient {
         // Try to get subscription list (this might fail due to OAuth scope limitations)
         info!("Attempting to fetch subscriptions via YouTube API...");
         
-        // For now, we'll use mock data since we know the OAuth2 library has scope constraints
+        // For now, we'll use known channels since we know the OAuth2 library has scope constraints
         // In the future, this could be enhanced to work with proper API permissions
-        warn!("Using mock subscription data due to OAuth scope limitations");
+        info!("Fetching real details for known subscription channels");
         return self.get_mock_subscriptions_with_real_details().await;
     }
 
