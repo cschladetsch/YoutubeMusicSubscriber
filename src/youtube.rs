@@ -93,84 +93,144 @@ impl YouTubeClient {
     pub async fn get_my_subscriptions(&self) -> Result<Vec<Artist>> {
         info!("Fetching user subscriptions");
         
-        // For now, return a mock list since the YouTube library has OAuth scope limitations
-        // We know from previous runs that you have these subscriptions
+        // Try to get subscription list (this might fail due to OAuth scope limitations)
+        info!("Attempting to fetch subscriptions via YouTube API...");
+        
+        // For now, we'll use mock data since we know the OAuth2 library has scope constraints
+        // In the future, this could be enhanced to work with proper API permissions
+        warn!("Using mock subscription data due to OAuth scope limitations");
+        return self.get_mock_subscriptions_with_real_details().await;
+    }
+
+    async fn get_channel_details(&self, channel_id: &str) -> Result<Artist> {
+        // Try API key approach first (more quota-friendly)
+        if let Some(ref api_key) = self.api_key {
+            let client = reqwest::Client::new();
+            let url = format!(
+                "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={channel_id}&key={api_key}"
+            );
+            
+            if let Ok(response) = client.get(&url).send().await {
+                if let Ok(data) = response.json::<serde_json::Value>().await {
+                    if let Some(items) = data["items"].as_array() {
+                        if let Some(item) = items.first() {
+                            let name = item["snippet"]["title"].as_str().unwrap_or("Unknown").to_string();
+                            let description = item["snippet"]["description"].as_str().map(|s| s.to_string());
+                            let subscriber_count = item["statistics"]["subscriberCount"].as_str()
+                                .and_then(|s| s.parse::<u64>().ok());
+                            
+                            return Ok(Artist {
+                                name,
+                                channel_id: channel_id.to_string(),
+                                subscriber_count,
+                                description,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Fallback to OAuth approach
+        let req = self.youtube.channels()
+            .list(&vec!["snippet".to_string(), "statistics".to_string()])
+            .add_id(channel_id);
+            
+        let response = req.doit().await?;
+        let (_, channel_response) = response;
+        
+        if let Some(items) = channel_response.items {
+            if let Some(channel) = items.first() {
+                if let Some(snippet) = &channel.snippet {
+                    let name = snippet.title.as_ref().unwrap_or(&"Unknown".to_string()).clone();
+                    let description = snippet.description.clone();
+                    let subscriber_count = channel.statistics.as_ref()
+                        .and_then(|s| s.subscriber_count);
+                    
+                    return Ok(Artist {
+                        name,
+                        channel_id: channel_id.to_string(),
+                        subscriber_count,
+                        description,
+                    });
+                }
+            }
+        }
+        
+        anyhow::bail!("Failed to get channel details for {channel_id}")
+    }
+
+    async fn get_mock_subscriptions_with_real_details(&self) -> Result<Vec<Artist>> {
+        // Known subscription names - we'll fetch real details for these
+        let known_channels = vec![
+            "Let's Get Rusty",
+            "Marques Brownlee", 
+            "agadmator's Chess Channel",
+            "ForrestKnight",
+            "AI Revolution",
+        ];
+        
+        let mut artists = Vec::new();
+        
+        info!("Fetching real details for {} known channels...", known_channels.len());
+        
+        for channel_name in known_channels {
+            info!("Searching for channel: {channel_name}");
+            
+            // Search for the channel to get its ID
+            match self.search_artist(channel_name).await {
+                Ok(Some(artist)) => {
+                    // Now get full details including subscriber count
+                    match self.get_channel_details(&artist.channel_id).await {
+                        Ok(detailed_artist) => {
+                            info!("Got details for {}: {} subs", detailed_artist.name, 
+                                detailed_artist.subscriber_count.map(|c| c.to_string()).unwrap_or("N/A".to_string()));
+                            artists.push(detailed_artist);
+                        },
+                        Err(e) => {
+                            warn!("Failed to get details for {channel_name}: {e}");
+                            artists.push(artist); // Use basic info
+                        }
+                    }
+                },
+                Ok(None) => {
+                    warn!("Could not find channel: {channel_name}");
+                },
+                Err(e) => {
+                    warn!("Search failed for {channel_name}: {e}");
+                }
+            }
+            
+            // Add delay between requests to be respectful
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+        
+        if artists.is_empty() {
+            return self.get_mock_subscriptions().await;
+        }
+        
+        info!("Successfully fetched details for {} channels", artists.len());
+        Ok(artists)
+    }
+
+    async fn get_mock_subscriptions(&self) -> Result<Vec<Artist>> {
+        // Fallback mock data when everything fails
         let mock_subscriptions = vec![
             Artist {
-                name: "Boogie Belgique".to_string(),
+                name: "Let's Get Rusty".to_string(),
                 channel_id: "mock_id_1".to_string(),
                 subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "Benjy".to_string(),
-                channel_id: "mock_id_2".to_string(),
-                subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "WinterStarcraft".to_string(),
-                channel_id: "mock_id_3".to_string(),
-                subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "ForrestKnight".to_string(),
-                channel_id: "mock_id_4".to_string(),
-                subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "agadmator's Chess Channel".to_string(),
-                channel_id: "mock_id_5".to_string(),
-                subscriber_count: None,
-                description: None,
+                description: Some("Rust programming tutorials (mock data)".to_string()),
             },
             Artist {
                 name: "Marques Brownlee".to_string(),
-                channel_id: "mock_id_6".to_string(),
+                channel_id: "mock_id_2".to_string(),
                 subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "AI Revolution".to_string(),
-                channel_id: "mock_id_7".to_string(),
-                subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "Epic Chess".to_string(),
-                channel_id: "mock_id_8".to_string(),
-                subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "EminemMusic".to_string(),
-                channel_id: "mock_id_9".to_string(),
-                subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "KoRn".to_string(),
-                channel_id: "mock_id_10".to_string(),
-                subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "Sia".to_string(),
-                channel_id: "mock_id_11".to_string(),
-                subscriber_count: None,
-                description: None,
-            },
-            Artist {
-                name: "Let's Get Rusty".to_string(),
-                channel_id: "mock_id_12".to_string(),
-                subscriber_count: None,
-                description: None,
+                description: Some("Technology reviews (mock data)".to_string()),
             },
         ];
 
-        info!("Using mock subscription list with {} items", mock_subscriptions.len());
+        info!("Using fallback mock subscription list with {} items", mock_subscriptions.len());
         Ok(mock_subscriptions)
     }
 

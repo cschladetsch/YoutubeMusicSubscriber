@@ -2,9 +2,22 @@ use clap::{Parser, Subcommand};
 use log::{info, error, warn};
 use std::path::PathBuf;
 use std::collections::HashSet;
+use colored::*;
 
 mod youtube;
 use youtube::{YouTubeClient, parse_artists_file};
+
+fn format_subscriber_count(count: u64) -> String {
+    if count >= 1_000_000 {
+        let val = count as f64 / 1_000_000.0;
+        format!("{val:.1}M")
+    } else if count >= 1_000 {
+        let val = count as f64 / 1_000.0;
+        format!("{val:.0}K")
+    } else {
+        format!("{count}")
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "ytmusic-manager")]
@@ -73,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
     let log_level = if cli.verbose {
         "debug"
     } else {
-        "info"
+        "warn"
     };
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
 
@@ -171,51 +184,51 @@ async fn cmd_sync(
     }
 
     // Display sync plan
-    println!("\nSYNC PLAN:");
-    println!("==================================================");
-    println!("Current subscriptions: {}", current_subscriptions.len());
-    println!("Target artists: {}", target_artists.len());
-    println!("Already subscribed: {}", already_subscribed.len());
-    println!("To subscribe: {}", to_subscribe.len());
+    println!("\n{}", "SYNC PLAN:".bright_cyan().bold());
+    println!("{}", "==================================================".bright_cyan());
+    println!("Current subscriptions: {}", current_subscriptions.len().to_string().bright_white().bold());
+    println!("Target artists: {}", target_artists.len().to_string().bright_white().bold());
+    println!("Already subscribed: {}", already_subscribed.len().to_string().bright_green().bold());
+    println!("To subscribe: {}", to_subscribe.len().to_string().bright_yellow().bold());
 
     if !already_subscribed.is_empty() {
-        println!("\nAlready SUBSCRIBED to:");
+        println!("\n{}", "Already SUBSCRIBED to:".bright_green().bold());
         for artist in &already_subscribed {
-            println!("  ✓ {artist}");
+            println!("  {} {}", "✓".bright_green().bold(), artist.bright_white());
         }
     }
 
     if !to_subscribe.is_empty() {
         if dry_run {
-            println!("\nDRY RUN - Would SUBSCRIBE to:");
+            println!("\n{}", "DRY RUN - Would SUBSCRIBE to:".bright_yellow().bold());
             for artist in &to_subscribe {
-                println!("  + {artist}");
+                println!("  {} {}", "+".bright_yellow().bold(), artist.bright_white());
             }
         } else {
-            println!("\nSUBSCRIBING to {} artists:", to_subscribe.len());
+            println!("\n{} {} {}", "SUBSCRIBING to".bright_blue().bold(), to_subscribe.len().to_string().bright_white().bold(), "artists:".bright_blue().bold());
             
             for (i, artist_name) in to_subscribe.iter().enumerate() {
-                println!("  [{}/{}] Searching for: {}", i + 1, to_subscribe.len(), artist_name);
+                println!("  {} {} {}", format!("[{}/{}]", i + 1, to_subscribe.len()).bright_blue().bold(), "Searching for:".bright_blue(), artist_name.bright_white().bold());
                 
                 match client.search_artist(artist_name).await {
                     Ok(Some(artist)) => {
-                        println!("    Found: {} ({})", artist.name, artist.channel_id);
+                        println!("    {} {} {}", "Found:".bright_green(), artist.name.bright_white().bold(), format!("({})", artist.channel_id).bright_black());
                         
                         match client.subscribe_to_channel(&artist.channel_id).await {
-                            Ok(()) => println!("    ✓ Successfully subscribed"),
+                            Ok(()) => println!("    {} {}", "✓".bright_green().bold(), "Successfully subscribed".bright_green()),
                             Err(e) => {
                                 warn!("Failed to subscribe to {artist_name}: {e}");
-                                println!("    ✗ Failed to subscribe: {e}");
+                                println!("    {} {}: {}", "✗".bright_red().bold(), "Failed to subscribe".bright_red(), e.to_string().red());
                             }
                         }
                     }
                     Ok(None) => {
                         warn!("Could not find artist: {artist_name}");
-                        println!("    ✗ Artist not found");
+                        println!("    {} {}", "✗".bright_red().bold(), "Artist not found".bright_red());
                     }
                     Err(e) => {
                         warn!("Search failed for {artist_name}: {e}");
-                        println!("    ✗ Search error: {e}");
+                        println!("    {} {}: {}", "✗".bright_red().bold(), "Search error".bright_red(), e.to_string().red());
                     }
                 }
                 
@@ -225,7 +238,7 @@ async fn cmd_sync(
             }
         }
     } else {
-        println!("\n✓ All target artists are already subscribed!");
+        println!("\n{} {}", "✓".bright_green().bold(), "All target artists are already subscribed!".bright_green().bold());
     }
 
     Ok(())
@@ -241,14 +254,20 @@ async fn cmd_list(
     let client = YouTubeClient::new().await?;
     let subscriptions = client.get_my_subscriptions().await?;
     
-    println!("\nCURRENT SUBSCRIPTIONS ({})", subscriptions.len());
-    println!("==================================================");
+    println!("\n{} {}", "CURRENT SUBSCRIPTIONS".bright_cyan().bold(), format!("({})", subscriptions.len()).bright_white().bold());
+    println!("{}", "==================================================".bright_cyan());
     
     if subscriptions.is_empty() {
-        println!("No subscriptions found.");
+        println!("{}", "No subscriptions found.".bright_yellow());
     } else {
         for artist in &subscriptions {
-            println!("• {}", artist.name);
+            let info = match (&artist.description, artist.subscriber_count) {
+                (Some(desc), Some(count)) => format!("({desc} - {} subs)", format_subscriber_count(count)),
+                (Some(desc), None) => format!("({desc})"),
+                (None, Some(count)) => format!("({} subs)", format_subscriber_count(count)),
+                (None, None) => String::new(),
+            };
+            println!("{} {} {}", "•".bright_blue(), artist.name.bright_white(), info.bright_black());
         }
     }
     
@@ -258,7 +277,7 @@ async fn cmd_list(
             .collect::<Vec<_>>()
             .join("\n");
         std::fs::write(output_file, content)?;
-        println!("\nSubscriptions saved to: {}", output_file.display());
+        println!("\n{} {}", "Subscriptions saved to:".bright_green(), output_file.display().to_string().bright_white().bold());
     }
 
     Ok(())
@@ -285,17 +304,17 @@ async fn cmd_validate(artists_file: &PathBuf, verbose: bool) -> anyhow::Result<(
 
                     // Parse tags if present
                     if let Some((name, tags)) = line.split_once('|') {
-                        println!("VALID Line {}: {} (tags: {})", line_num + 1, name.trim(), tags.trim());
+                        println!("{} {}: {} {}", "VALID Line".bright_green(), (line_num + 1).to_string().bright_white().bold(), name.trim().bright_white().bold(), format!("(tags: {})", tags.trim()).bright_black());
                     } else {
-                        println!("VALID Line {}: {}", line_num + 1, line);
+                        println!("{} {}: {}", "VALID Line".bright_green(), (line_num + 1).to_string().bright_white().bold(), line.bright_white().bold());
                     }
                 }
             }
 
-            println!("\nVALIDATION RESULTS:");
-            println!("Valid artists: {}", artists.len());
-            println!("Errors: 0");
-            println!("All entries are valid!");
+            println!("\n{}", "VALIDATION RESULTS:".bright_cyan().bold());
+            println!("{} {}", "Valid artists:".bright_green(), artists.len().to_string().bright_white().bold());
+            println!("{} {}", "Errors:".bright_green(), "0".bright_green().bold());
+            println!("{}", "All entries are valid!".bright_green().bold());
 
             Ok(())
         }
