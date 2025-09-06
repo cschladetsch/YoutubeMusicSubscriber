@@ -8,15 +8,38 @@ mod youtube;
 use youtube::{YouTubeClient, parse_artists_file};
 
 fn format_subscriber_count(count: u64) -> String {
-    if count >= 1_000_000 {
+    use colored::*;
+    
+    let formatted = if count >= 10_000_000 {
+        // 10M+ - Diamond tier
         let val = count as f64 / 1_000_000.0;
-        format!("{val:.1}M")
-    } else if count >= 1_000 {
+        format!("{:.1}M", val).bright_magenta().bold()
+    } else if count >= 1_000_000 {
+        // 1M+ - Platinum tier  
+        let val = count as f64 / 1_000_000.0;
+        format!("{:.1}M", val).bright_cyan().bold()
+    } else if count >= 500_000 {
+        // 500K+ - Gold tier
         let val = count as f64 / 1_000.0;
-        format!("{val:.0}K")
+        format!("{:.0}K", val).bright_yellow().bold()
+    } else if count >= 100_000 {
+        // 100K+ - Silver tier
+        let val = count as f64 / 1_000.0;
+        format!("{:.0}K", val).bright_white().bold()
+    } else if count >= 10_000 {
+        // 10K+ - Bronze tier
+        let val = count as f64 / 1_000.0;
+        format!("{:.0}K", val).yellow()
+    } else if count >= 1_000 {
+        // 1K+ - Growing
+        let val = count as f64 / 1_000.0;
+        format!("{:.0}K", val).green()
     } else {
-        format!("{count}")
-    }
+        // Sub-1K - Starting out
+        format!("{}", count).bright_black()
+    };
+    
+    formatted.to_string()
 }
 
 #[derive(Parser)]

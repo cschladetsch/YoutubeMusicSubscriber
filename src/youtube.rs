@@ -113,19 +113,34 @@ impl YouTubeClient {
         .build()
         .await?;
 
-        // Force token request with correct scopes (don't rely on cache validation)
-        info!("Requesting YouTube API access token with full permissions");
+        // Check if we have valid tokens (don't force refresh on every call)
+        info!("Checking YouTube API authentication status");
+        
+        // Only request new tokens if we don't have valid cached ones
+        // The authenticator will handle refresh automatically if needed
         match auth.token(scopes).await {
-            Ok(_) => info!("Successfully obtained authentication tokens with full YouTube access"),
+            Ok(_) => info!("Successfully authenticated with YouTube API"),
             Err(e) => {
                 warn!("Authentication failed: {e}");
-                println!("\n🔐 {} {}", "AUTHENTICATION REQUIRED".bright_yellow().bold(), "- First time setup".bright_black());
+                info!("This may be due to expired tokens or first-time setup");
+                
+                // Clear potentially corrupted token cache and retry once
+                if std::path::Path::new(&config.settings.token_cache_file).exists() {
+                    warn!("Clearing potentially corrupted token cache");
+                    std::fs::remove_file(&config.settings.token_cache_file).ok();
+                }
+                
+                println!("\n🔐 {} {}", "AUTHENTICATION REQUIRED".bright_yellow().bold(), "- Token refresh needed".bright_black());
                 println!("{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_blue());
                 println!("1. {} {}", "BROWSER:".bright_cyan().bold(), "Visit the URL that appears next");
                 println!("2. {} {}", "GOOGLE:".bright_cyan().bold(), "Sign in and authorize the app");
                 println!("3. {} {}", "COPY:".bright_cyan().bold(), "Copy the authorization code from the browser");
                 println!("4. {} {}", "TERMINAL:".bright_cyan().bold(), "Paste the code here and press Enter");
                 println!("{}\n", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_blue());
+                
+                // Retry authentication after clearing cache
+                auth.token(scopes).await.context("Failed to authenticate after clearing token cache")?;
+                info!("Successfully authenticated after token refresh");
             }
         }
 
@@ -339,18 +354,25 @@ impl YouTubeClient {
         let has_more = offset + page_channels.len() < total_channels;
         let mut artists = Vec::new();
         
+        println!("Fetching details for {} channels (page {} of approx {})...", 
+                 page_channels.len(), 
+                 (offset / limit) + 1,
+                 (total_channels + limit - 1) / limit);
         info!("Fetching real details for {} channels (page {} of approx {})", 
               page_channels.len(), 
               (offset / limit) + 1,
               (total_channels + limit - 1) / limit);
         
-        for channel_name in &page_channels {
+        for (i, channel_name) in page_channels.iter().enumerate() {
+            print!("  [{}/{}] {}...", i + 1, page_channels.len(), channel_name);
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
             info!("Processing channel: {channel_name}");
             
             // Check cache first (unless force_update is true)
             if !force_update {
                 match self.get_cached_artist(channel_name) {
                     Ok(Some(cached_artist)) => {
+                        println!(" cached ✓");
                         info!("Using cached data for: {channel_name}");
                         artists.push(cached_artist);
                         continue;
@@ -366,39 +388,55 @@ impl YouTubeClient {
                 info!("Force update enabled, bypassing cache for: {channel_name}");
             }
             
-            // Search for the channel to get its ID
-            match self.search_artist(channel_name).await {
-                Ok(Some(artist)) => {
-                    // Now get full details including subscriber count
-                    match self.get_channel_details(&artist.channel_id).await {
-                        Ok(detailed_artist) => {
-                            info!("Got details for {}: {} subs", detailed_artist.name, 
-                                detailed_artist.subscriber_count.map(|c| c.to_string()).unwrap_or("N/A".to_string()));
-                            
-                            // Cache the detailed artist data
-                            if let Err(e) = self.cache_artist(channel_name, &detailed_artist) {
-                                warn!("Failed to cache {channel_name}: {e}");
+            // Search for the channel to get its ID with timeout
+            let search_timeout = tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                self.search_artist(channel_name)
+            ).await;
+
+            match search_timeout {
+                Ok(search_result) => match search_result {
+                    Ok(Some(artist)) => {
+                        // Now get full details including subscriber count
+                        match self.get_channel_details(&artist.channel_id).await {
+                            Ok(detailed_artist) => {
+                                println!(" found ✓");
+                                info!("Got details for {}: {} subs", detailed_artist.name, 
+                                    detailed_artist.subscriber_count.map(|c| c.to_string()).unwrap_or("N/A".to_string()));
+                                
+                                // Cache the detailed artist data
+                                if let Err(e) = self.cache_artist(channel_name, &detailed_artist) {
+                                    warn!("Failed to cache {channel_name}: {e}");
+                                }
+                                
+                                artists.push(detailed_artist);
+                            },
+                            Err(e) => {
+                                println!(" partial ⚠");
+                                info!("Failed to get details for {channel_name}: {e}");
+                                
+                                // Cache basic info so we don't search again
+                                if let Err(cache_err) = self.cache_artist(channel_name, &artist) {
+                                    warn!("Failed to cache basic info for {channel_name}: {cache_err}");
+                                }
+                                
+                                artists.push(artist); // Use basic info
                             }
-                            
-                            artists.push(detailed_artist);
-                        },
-                        Err(e) => {
-                            info!("Failed to get details for {channel_name}: {e}");
-                            
-                            // Cache basic info so we don't search again
-                            if let Err(cache_err) = self.cache_artist(channel_name, &artist) {
-                                warn!("Failed to cache basic info for {channel_name}: {cache_err}");
-                            }
-                            
-                            artists.push(artist); // Use basic info
                         }
+                    },
+                    Ok(None) => {
+                        println!(" not found ✗");
+                        info!("Could not find channel: {channel_name}");
+                    },
+                    Err(e) => {
+                        println!(" error ✗");
+                        info!("Search failed for {channel_name}: {e}");
                     }
                 },
-                Ok(None) => {
-                    info!("Could not find channel: {channel_name}");
-                },
-                Err(e) => {
-                    info!("Search failed for {channel_name}: {e}");
+                Err(_) => {
+                    use colored::*;
+                    println!(" {}", "too long ⏱".bright_red());
+                    info!("Search timeout for {channel_name} (> 3 seconds)");
                 }
             }
             
