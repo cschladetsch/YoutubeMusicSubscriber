@@ -1,0 +1,52 @@
+{
+  "google": {
+    "client_secret": {
+      "installed": {
+        "client_id": "your-client-id.apps.googleusercontent.com",
+        "project_id": "your-project-id",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_secret": "your-client-secret",
+        "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob", "http://localhost"]
+      }
+    },
+    "api_key": "your-youtube-data-api-key-here"
+  },
+  "database": {
+    "cache_db_path": "artist_cache.db",
+    "cache_expiry_days": 7
+  },
+  "artists": [
+    "Infected Mushroom",
+    "INXS", 
+    "Cold Chisel",
+    "Faith No More",
+    "Dog Fashion Disco",
+    "Nine Inch Nails",
+    "Korn",
+    "Mike Oldfield",
+    "Gramatik",
+    "Too Many Zooz",
+    "Funky Destination",
+    "Meute",
+    "Opiuo",
+    "Parov Stelar",
+    "Adhesive Wombat",
+    "Rammstein",
+    "Odd Chap",
+    "Stupid Human",
+    "Caravan Palace",
+    "Ice Paper",
+    "Phoenix Legend",
+    "The Hu",
+    "Ummet Ozcan"
+  ],
+  "settings": {
+    "search_delay_ms": 100,
+    "items_per_page": 50,
+    "request_timeout_seconds": 30,
+    "default_log_level": "warn",
+    "token_cache_file": "tokencache.json"
+  }
+}

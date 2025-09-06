@@ -41,9 +41,9 @@ struct Cli {
 enum Commands {
     /// Sync artist subscriptions
     Sync {
-        /// Artists file path
-        #[arg(long, default_value = "artists.txt")]
-        artists_file: PathBuf,
+        /// Artists file path (optional, uses config.json if not specified)
+        #[arg(long)]
+        artists_file: Option<PathBuf>,
 
         /// Preview changes without making them
         #[arg(long, default_value_t = true)]
@@ -66,10 +66,18 @@ enum Commands {
         /// Save list to a file
         #[arg(short, long)]
         output: Option<PathBuf>,
+        
+        /// Artists file path (optional, uses config.json if not specified)
+        #[arg(long)]
+        artists_file: Option<PathBuf>,
+        
+        /// Update artist info from API (ignores cache)
+        #[arg(long)]
+        update_artist_info: bool,
     },
     /// Validate artists file format
     Validate {
-        /// Artists file path
+        /// Artists file path (required for validation)
         #[arg(long, default_value = "artists.txt")]
         artists_file: PathBuf,
     },
@@ -108,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let actual_dry_run = if no_dry_run { false } else { dry_run };
             cmd_sync(
-                &artists_file,
+                artists_file.as_deref(),
                 actual_dry_run,
                 delay,
                 interactive,
@@ -117,8 +125,8 @@ async fn main() -> anyhow::Result<()> {
             )
             .await
         }
-        Commands::List { output } => {
-            cmd_list(output.as_deref(), !cli.show_browser, cli.verbose).await
+        Commands::List { output, artists_file, update_artist_info } => {
+            cmd_list(output.as_deref(), artists_file.as_deref(), update_artist_info, !cli.show_browser, cli.verbose).await
         }
         Commands::Validate { artists_file } => {
             cmd_validate(&artists_file, cli.verbose).await
@@ -138,31 +146,46 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn cmd_sync(
-    artists_file: &PathBuf,
+    artists_file: Option<&std::path::Path>,
     dry_run: bool,
     delay: f64,
     _interactive: bool,
     _headless: bool, // Not needed for API
     _verbose: bool,
 ) -> anyhow::Result<()> {
+    let source = if let Some(file) = artists_file {
+        format!("file: {}", file.display())
+    } else {
+        "config.json".to_string()
+    };
+    
     info!(
-        "Starting sync {} (file: {}, delay: {}s)",
+        "Starting sync {} (source: {}, delay: {}s)",
         if dry_run { "(DRY RUN)" } else { "" },
-        artists_file.display(),
+        source,
         delay
     );
 
-    if !artists_file.exists() {
-        anyhow::bail!("Artists file not found: {}", artists_file.display());
-    }
-
-    // Parse artists file
-    let content = std::fs::read_to_string(artists_file)?;
-    let target_artists = parse_artists_file(&content)?;
-    info!("Loaded {} target artists from {}", target_artists.len(), artists_file.display());
-
-    // Initialize YouTube client
+    // Initialize YouTube client and get target artists
     let client = YouTubeClient::new().await?;
+    let target_artists = if let Some(file_path) = artists_file {
+        if !file_path.exists() {
+            anyhow::bail!("Artists file not found: {}", file_path.display());
+        }
+        
+        // Parse artists file
+        let content = std::fs::read_to_string(file_path)?;
+        let parsed_artists = parse_artists_file(&content)?;
+        info!("Loaded {} target artists from {}", parsed_artists.len(), file_path.display());
+        parsed_artists
+    } else {
+        // Use config artists
+        let config_artists = client.get_config_artists().clone();
+        info!("Loaded {} target artists from config.json", config_artists.len());
+        config_artists
+    };
+
+    // Client already initialized above
     
     // Get current subscriptions
     let current_subscriptions = client.get_my_subscriptions().await?;
@@ -246,6 +269,8 @@ async fn cmd_sync(
 
 async fn cmd_list(
     output: Option<&std::path::Path>,
+    artists_file: Option<&std::path::Path>,
+    update_artist_info: bool,
     _headless: bool, // Not needed for API
     _verbose: bool,
 ) -> anyhow::Result<()> {
@@ -253,11 +278,11 @@ async fn cmd_list(
 
     let client = YouTubeClient::new().await?;
     let mut offset = 0;
-    let limit = 5;
+    let limit = 50; // Show more at once with higher quotas
     let mut all_subscriptions = Vec::new();
     
     loop {
-        let (subscriptions, has_more) = client.get_subscriptions_with_pagination(offset, limit).await?;
+        let (subscriptions, has_more) = client.get_subscriptions_with_pagination(offset, limit, artists_file, update_artist_info).await?;
         
         if subscriptions.is_empty() && offset == 0 {
             println!("{}", "No subscriptions found.".bright_yellow());
@@ -290,7 +315,7 @@ async fn cmd_list(
         print!("\n{} {} {} {}", 
                "Show next".bright_cyan(), 
                limit.to_string().bright_white().bold(),
-               "subscriptions?".bright_cyan(),
+               "artists?".bright_cyan(),
                "[Y/n]:".bright_yellow());
         std::io::Write::flush(&mut std::io::stdout())?;
         

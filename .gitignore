@@ -1,9 +1,15 @@
-# API credentials
+# Configuration with secrets
+config.json
+
+# API credentials (legacy)
 api.key
 oauth.json
 client_*.json
 client-*.txt
 tokencache.json
+
+# Cache database
+artist_cache.db
 
 # Virtual environment
 venv/

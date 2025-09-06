@@ -6,6 +6,8 @@ use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use google_youtube3::yup_oauth2::{self as oauth2, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 use colored::*;
+use rusqlite::{Connection, params};
+// use chrono::{DateTime, Utc, Duration}; // For future cache expiry features
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artist {
@@ -15,18 +17,78 @@ pub struct Artist {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoogleConfig {
+    client_secret: serde_json::Value,
+    api_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseConfig {
+    cache_db_path: String,
+    cache_expiry_days: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SettingsConfig {
+    search_delay_ms: u64,
+    items_per_page: usize,
+    request_timeout_seconds: u64,
+    default_log_level: String,
+    token_cache_file: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    pub google: GoogleConfig,
+    pub database: DatabaseConfig,
+    pub artists: Vec<String>,
+    pub settings: SettingsConfig,
+}
+
 pub struct YouTubeClient {
     youtube: YouTube<hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>>,
-    api_key: Option<String>,
+    config: Config,
 }
 
 impl YouTubeClient {
     pub async fn new() -> Result<Self> {
+        let config = Self::load_config()?;
+        Self::new_with_config(config).await
+    }
+    
+    fn load_config() -> Result<Config> {
+        let config_path = "config.json";
+        let config_content = std::fs::read_to_string(config_path)
+            .with_context(|| format!(
+                "Failed to read {}. Please:\n1. Copy config.example.json to config.json\n2. Add your Google credentials and API key\n3. Update the artists list",
+                config_path
+            ))?;
+        
+        let config: Config = serde_json::from_str(&config_content)
+            .context("Failed to parse config.json. Please check the JSON format.")?;
+        
+        Ok(config)
+    }
+    
+    async fn new_with_config(config: Config) -> Result<Self> {
         info!("Initializing YouTube API client");
         info!("Note: Listing subscriptions requires OAuth authentication (API key not sufficient)");
-        let secret = oauth2::read_application_secret("client_secret.json")
-            .await
-            .context("Failed to read client_secret.json. Please:\n1. Download credentials from Google Cloud Console\n2. Save as 'client_secret.json' in project root\n3. See client_secret.json.example for format")?;
+        
+        // Load client secret from config.json using oauth2 built-in parsing
+        let secret_json = serde_json::to_string(&config.google.client_secret)
+            .context("Failed to serialize client_secret from config")?;
+        info!("Loading OAuth credentials from config.json");
+        
+        // Write to temporary file and use oauth2::read_application_secret
+        let temp_path = "/tmp/temp_client_secret.json";
+        tokio::fs::write(temp_path, &secret_json).await
+            .context("Failed to write temporary credentials file")?;
+        let secret = oauth2::read_application_secret(temp_path).await
+            .context("Failed to parse client_secret from config.json")?;
+        tokio::fs::remove_file(temp_path).await.ok(); // Clean up temp file
+        
+        info!("Using OAuth credentials from config.json");
 
         // Define required scopes for YouTube operations - use just the full scope
         let scopes = &[
@@ -37,7 +99,7 @@ impl YouTubeClient {
             secret,
             InstalledFlowReturnMethod::Interactive,
         )
-        .persist_tokens_to_disk("tokencache.json")
+        .persist_tokens_to_disk(&config.settings.token_cache_file)
         .hyper_client(
             Client::builder(TokioExecutor::new()).build(
                 HttpsConnectorBuilder::new()
@@ -78,22 +140,90 @@ impl YouTubeClient {
             .build(https);
 
         let youtube = YouTube::new(client, auth);
-
-        // Read API key if available for public operations
-        let api_key = std::fs::read_to_string("api.key")
-            .map(|key| key.trim().to_string())
-            .ok();
         
-        if api_key.is_some() {
-            info!("API key available for public operations");
-        }
-
-        Ok(Self { 
-            youtube, 
-            api_key 
-        })
+        info!("API key available for public operations");
+        
+        let client = Self { 
+            youtube,
+            config,
+        };
+        
+        // Initialize database
+        client.init_cache_db()?;
+        
+        Ok(client)
+    }
+    
+    pub fn get_config_artists(&self) -> &Vec<String> {
+        &self.config.artists
     }
 
+    fn init_cache_db(&self) -> Result<()> {
+        let conn = Connection::open(&self.config.database.cache_db_path)?;
+        
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS artist_cache (
+                search_name TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                channel_id TEXT NOT NULL,
+                subscriber_count INTEGER,
+                description TEXT,
+                cached_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )?;
+        
+        info!("Initialized artist cache database: {}", self.config.database.cache_db_path);
+        Ok(())
+    }
+
+    fn get_cached_artist(&self, search_name: &str) -> Result<Option<Artist>> {
+        let conn = Connection::open(&self.config.database.cache_db_path)?;
+        
+        // Check if we have recent cached data
+        let cache_days = format!("-{} days", self.config.database.cache_expiry_days);
+        let mut stmt = conn.prepare(
+            "SELECT name, channel_id, subscriber_count, description 
+             FROM artist_cache 
+             WHERE search_name = ? AND cached_at > datetime('now', ?)"
+        )?;
+        
+        let mut rows = stmt.query_map(params![search_name, cache_days], |row| {
+            Ok(Artist {
+                name: row.get(0)?,
+                channel_id: row.get(1)?,
+                subscriber_count: row.get(2)?,
+                description: row.get(3)?,
+            })
+        })?;
+        
+        if let Some(artist) = rows.next() {
+            info!("Found cached data for: {search_name}");
+            return Ok(Some(artist?));
+        }
+        
+        Ok(None)
+    }
+
+    fn cache_artist(&self, search_name: &str, artist: &Artist) -> Result<()> {
+        let conn = Connection::open(&self.config.database.cache_db_path)?;
+        
+        conn.execute(
+            "INSERT OR REPLACE INTO artist_cache 
+             (search_name, name, channel_id, subscriber_count, description, cached_at)
+             VALUES (?, ?, ?, ?, ?, datetime('now'))",
+            params![
+                search_name,
+                artist.name,
+                artist.channel_id,
+                artist.subscriber_count,
+                artist.description
+            ],
+        )?;
+        
+        info!("Cached artist data for: {search_name}");
+        Ok(())
+    }
 
     pub async fn get_my_subscriptions(&self) -> Result<Vec<Artist>> {
         info!("Fetching user subscriptions");
@@ -105,13 +235,15 @@ impl YouTubeClient {
         // In the future, this could be enhanced to work with proper API permissions
         info!("Fetching real details for known subscription channels");
         // This function is now only used by sync - return all results
-        let (artists, _) = self.get_subscriptions_with_pagination(0, 1000).await?;
+        // Use config artists by default
+        let (artists, _) = self.get_subscriptions_with_pagination(0, 1000, None, false).await?;
         return Ok(artists);
     }
 
     async fn get_channel_details(&self, channel_id: &str) -> Result<Artist> {
         // Try API key approach first (more quota-friendly)
-        if let Some(ref api_key) = self.api_key {
+        let api_key = &self.config.google.api_key;
+        if !api_key.is_empty() {
             let client = reqwest::Client::new();
             let url = format!(
                 "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={channel_id}&key={api_key}"
@@ -167,24 +299,30 @@ impl YouTubeClient {
         anyhow::bail!("Failed to get channel details for {channel_id}")
     }
 
-    pub async fn get_subscriptions_with_pagination(&self, offset: usize, limit: usize) -> Result<(Vec<Artist>, bool)> {
-        // Read from artists.txt to get the channels to fetch
-        let artists_content = match std::fs::read_to_string("artists.txt") {
-            Ok(content) => content,
-            Err(_) => {
-                warn!("Could not read artists.txt, using fallback channels");
-                let mock_subs = self.get_mock_subscriptions().await?;
-                return Ok((mock_subs, false));
+    pub async fn get_subscriptions_with_pagination(&self, offset: usize, limit: usize, artists_file: Option<&std::path::Path>, force_update: bool) -> Result<(Vec<Artist>, bool)> {
+        // Get the channels to fetch - either from file or config
+        let all_channels = if let Some(file_path) = artists_file {
+            // Use provided artists file
+            let artists_content = match std::fs::read_to_string(file_path) {
+                Ok(content) => content,
+                Err(_) => {
+                    warn!("Could not read artists file: {}, using mock data", file_path.display());
+                    let mock_subs = self.get_mock_subscriptions().await?;
+                    return Ok((mock_subs, false));
+                }
+            };
+            
+            match parse_artists_file(&artists_content) {
+                Ok(artists) => artists,
+                Err(_) => {
+                    warn!("Could not parse artists file, using mock data");
+                    let mock_subs = self.get_mock_subscriptions().await?;
+                    return Ok((mock_subs, false));
+                }
             }
-        };
-        
-        let all_channels = match parse_artists_file(&artists_content) {
-            Ok(artists) => artists,
-            Err(_) => {
-                warn!("Could not parse artists.txt, using fallback");
-                let mock_subs = self.get_mock_subscriptions().await?;
-                return Ok((mock_subs, false));
-            }
+        } else {
+            // Use config artists
+            self.config.artists.clone()
         };
         
         // Apply pagination
@@ -207,7 +345,26 @@ impl YouTubeClient {
               (total_channels + limit - 1) / limit);
         
         for channel_name in &page_channels {
-            info!("Searching for channel: {channel_name}");
+            info!("Processing channel: {channel_name}");
+            
+            // Check cache first (unless force_update is true)
+            if !force_update {
+                match self.get_cached_artist(channel_name) {
+                    Ok(Some(cached_artist)) => {
+                        info!("Using cached data for: {channel_name}");
+                        artists.push(cached_artist);
+                        continue;
+                    }
+                    Ok(None) => {
+                        info!("No cache for {channel_name}, searching API...");
+                    }
+                    Err(e) => {
+                        warn!("Cache error for {channel_name}: {e}");
+                    }
+                }
+            } else {
+                info!("Force update enabled, bypassing cache for: {channel_name}");
+            }
             
             // Search for the channel to get its ID
             match self.search_artist(channel_name).await {
@@ -217,10 +374,22 @@ impl YouTubeClient {
                         Ok(detailed_artist) => {
                             info!("Got details for {}: {} subs", detailed_artist.name, 
                                 detailed_artist.subscriber_count.map(|c| c.to_string()).unwrap_or("N/A".to_string()));
+                            
+                            // Cache the detailed artist data
+                            if let Err(e) = self.cache_artist(channel_name, &detailed_artist) {
+                                warn!("Failed to cache {channel_name}: {e}");
+                            }
+                            
                             artists.push(detailed_artist);
                         },
                         Err(e) => {
                             info!("Failed to get details for {channel_name}: {e}");
+                            
+                            // Cache basic info so we don't search again
+                            if let Err(cache_err) = self.cache_artist(channel_name, &artist) {
+                                warn!("Failed to cache basic info for {channel_name}: {cache_err}");
+                            }
+                            
                             artists.push(artist); // Use basic info
                         }
                     }
@@ -234,7 +403,7 @@ impl YouTubeClient {
             }
             
             // Add delay between requests to be respectful
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(self.config.settings.search_delay_ms)).await;
         }
         
         if artists.is_empty() {
@@ -271,7 +440,8 @@ impl YouTubeClient {
         info!("Searching for artist: {artist_name}");
         
         // Try using API key for search operations
-        if let Some(ref api_key) = self.api_key {
+        let api_key = &self.config.google.api_key;
+        if !api_key.is_empty() {
             info!("Using API key for search");
             let client = reqwest::Client::new();
             let url = format!(

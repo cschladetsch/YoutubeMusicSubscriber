@@ -9,15 +9,19 @@ A professional CLI tool for managing YouTube Music artist subscriptions using th
 
 ## Overview
 
-YouTube Music Manager allows you to synchronize your YouTube Music subscriptions with a local text file. It compares your target artist list against your current subscriptions and automatically manages the differences - subscribing to new artists and optionally unsubscribing from those not in your list.
+YouTube Music Manager allows you to synchronize your YouTube Music subscriptions with a unified configuration file. It compares your target artist list against your current subscriptions and automatically manages the differences - subscribing to new artists and optionally unsubscribing from those not in your list.
 
 ## Key Features
 
 - **Smart Synchronization** - Compare target artists with current subscriptions
+- **Unified Configuration** - All settings, credentials, and artists in one config.json file
+- **SQLite Caching** - Intelligent caching reduces API costs and improves performance
+- **Interactive Pagination** - Browse large artist lists with Y/n prompts
+- **Colored Output** - Beautiful terminal interface with intuitive color coding
 - **Dry Run Mode** - Preview changes before making them (enabled by default)
 - **YouTube Data API Integration** - Direct API access for reliable operations
 - **OAuth2 Authentication** - Secure Google account authentication
-- **Flexible Format** - Support artist tags and metadata in your files
+- **Flexible Format** - Support both config.json and external artist files
 - **Professional CLI** - Clean command-line interface with multiple operations
 - **Error Handling** - Comprehensive error reporting and recovery
 - **Cross-Platform** - Works on Windows, macOS, and Linux
@@ -28,31 +32,79 @@ YouTube Music Manager allows you to synchronize your YouTube Music subscriptions
 
 - Rust (latest stable version)
 - Google Cloud Console project with YouTube Data API v3 enabled
-- OAuth2 credentials (client_secret.json)
 - Active YouTube account
+- Your favorite artists list!
 
-### Setup Google Cloud Credentials
+### Setup Configuration
 
-1. **Create a Google Cloud Console project**:
+1. **Create your config file**:
+   ```bash
+   cp config.example.json config.json
+   ```
+
+2. **Create a Google Cloud Console project**:
    - Go to [Google Cloud Console](https://console.cloud.google.com/)
    - Create a new project or select existing one
    - Enable the **YouTube Data API v3**
 
-2. **Create OAuth2 credentials**:
+3. **Create OAuth2 credentials**:
    - Go to **APIs & Services** > **Credentials**
    - Click **Create Credentials** > **OAuth 2.0 Client IDs**
    - Choose **Desktop application**
    - Download the JSON file
 
-3. **Add test users (for development)**:
+4. **Create API Key** (optional but recommended):
+   - Go to **APIs & Services** > **Credentials**
+   - Click **Create Credentials** > **API Key**
+   - Copy the key
+
+5. **Add test users (for development)**:
    - Go to **APIs & Services** > **OAuth consent screen**
    - Scroll to **Test users** section
    - Click **ADD USERS** and add your email address
 
-4. **Setup credentials**:
-   ```bash
-   # Copy downloaded file to project root
-   cp ~/Downloads/client_secret_*.json client_secret.json
+6. **Configure your config.json**:
+   - Open the downloaded OAuth2 credentials file from Google Cloud Console
+   - Copy the entire "installed" section into config.json's client_secret field
+   - Add your API key
+   - Add your artist list
+   
+   Example:
+   ```json
+   {
+     "google": {
+       "client_secret": {
+         "installed": {
+           "client_id": "your-app-id.apps.googleusercontent.com",
+           "project_id": "your-project-name",
+           "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+           "token_uri": "https://oauth2.googleapis.com/token",
+           "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+           "client_secret": "your-oauth-secret",
+           "redirect_uris": ["http://localhost"]
+         }
+       },
+       "api_key": "your-youtube-data-api-key-here"
+     },
+     "database": {
+       "cache_db_path": "artist_cache.db",
+       "cache_expiry_days": 7
+     },
+     "artists": [
+       "Faith No More",
+       "Nine Inch Nails",
+       "Radiohead",
+       "Tool",
+       "Infected Mushroom"
+     ],
+     "settings": {
+       "search_delay_ms": 100,
+       "items_per_page": 50,
+       "request_timeout_seconds": 30,
+       "default_log_level": "warn",
+       "token_cache_file": "tokencache.json"
+     }
+   }
    ```
 
 ### Install from Source
@@ -72,75 +124,100 @@ cargo build --release
 # Test the installation
 cargo run -- --help
 
-# Validate your artists file
-cargo run -- validate
+# List your artists from config.json
+cargo run -- list
+
+# Validate a specific artists file (optional)
+cargo run -- validate --artists-file artists.txt
 
 # Alternative: Use the convenience script (recommended)
 ./run --help
-./run validate
+./run list
 ```
 
 ## Quick Start
 
-### 1. Create Your Artists File
+### 1. Configure the Application
 
-Create an `artists.txt` file with one artist per line:
-
-```text
-# My favorite artists
-Faith No More
-Nine Inch Nails|industrial|metal
-Radiohead
-Tool|progressive|metal
-
-# Electronic artists
-Aphex Twin|electronic|ambient
-Boards of Canada|electronic|idm
-```
-
-**Format Rules:**
-- One artist name per line
-- Use `|` to separate artist name from optional tags
-- Lines starting with `#` are comments (ignored)
-- Empty lines are ignored
-- Tags are for organization (not used in matching)
-
-### 2. Preview Your Changes
+Copy the example configuration and edit it with your credentials and artists:
 
 ```bash
-# See what would be changed (safe dry-run mode)
+cp config.example.json config.json
+```
+
+Edit `config.json` with your Google credentials and artist list:
+
+```json
+{
+  "google": {
+    "client_secret": { /* Your OAuth2 credentials */ },
+    "api_key": "your-api-key"
+  },
+  "artists": [
+    "Faith No More",
+    "Nine Inch Nails", 
+    "Radiohead",
+    "Tool",
+    "Infected Mushroom"
+  ]
+}
+```
+
+The configuration file provides:
+- **Unified Setup** - All credentials and settings in one place
+- **Smart Caching** - Reduces API costs with SQLite database
+- **Flexible Artists** - Define your artist list directly in config
+- **Customizable Behavior** - Adjust timeouts, pagination, logging levels
+
+**Alternative: Use artists.txt file**
+You can still use a separate `artists.txt` file with the `--artists-file` option:
+
+```text
+# My favorite artists  
+Faith No More
+Nine Inch Nails
+Radiohead
+```
+
+### 2. Test Your Setup
+
+```bash
+# List your artists and see cached data
+./run list
+
+# Preview sync changes (safe dry-run mode) 
 ./run sync
 
-# Get more detailed output
-./run --verbose sync
-
-# Alternative: Use convenience script (recommended)
-./run sync
+# Get detailed output with caching info
+./run --verbose list
 ./run --verbose sync
 ```
 
 ### 3. Apply Changes
 
 ```bash
-# Actually make the changes
+# Actually make the subscription changes
 ./run sync --no-dry-run
 
-# Or with convenience script (recommended)
-./run sync --no-dry-run
+# Force refresh artist info (bypass cache)
+./run list --update-artist-info
+
+# Use external artist file if needed
+./run sync --artists-file custom_artists.txt --no-dry-run
 ```
 
 ## Commands
 
 ### `sync` - Synchronize Subscriptions
 
-Compares your artists file with current YouTube Music subscriptions using the YouTube Data API.
+Compares your artist list (from config.json or external file) with current YouTube Music subscriptions using the YouTube Data API.
 
 ```bash
 ./run sync [OPTIONS]
 ```
 
 **Options:**
-- `--artists-file FILE` - Artists file path (default: `artists.txt`)
+- `--artists-file FILE` - Use external artists file (optional, defaults to config.json)
 - `--dry-run` - Preview changes without applying them (default behavior)
 - `--no-dry-run` - Actually apply the changes
 - `--delay SECONDS` - Delay between API requests in seconds (default: 2.0)
@@ -148,19 +225,22 @@ Compares your artists file with current YouTube Music subscriptions using the Yo
 
 **Examples:**
 ```bash
-# Preview sync (safe, default behavior)
+# Preview sync using config.json artists (safe, default)
 ./run sync
 
-# Actually apply changes
+# Actually apply changes using config.json
 ./run sync --no-dry-run
 
-# Use custom artists file with slower pace
-./run sync --artists-file my_artists.txt --delay 3
+# Use external artists file
+./run sync --artists-file my_artists.txt --no-dry-run
+
+# Slower pace for rate limiting
+./run sync --delay 3
 ```
 
 ### `list` - Show Current Subscriptions
 
-Lists all channels you're currently subscribed to on YouTube using the YouTube Data API.
+Lists artists from your config with detailed information, using intelligent caching to reduce API costs.
 
 ```bash
 ./run list [OPTIONS]
@@ -168,14 +248,25 @@ Lists all channels you're currently subscribed to on YouTube using the YouTube D
 
 **Options:**
 - `--output FILE` - Save list to a file
+- `--artists-file FILE` - Use external artists file (optional, defaults to config.json)
+- `--update-artist-info` - Force refresh from API (bypass 7-day cache)
+
+**Features:**
+- **Interactive Pagination** - Shows artists in batches with Y/n prompts
+- **Smart Caching** - Stores artist data for 7 days to reduce API costs
+- **Rich Information** - Shows subscriber counts and descriptions
+- **Colored Output** - Beautiful terminal formatting
 
 **Examples:**
 ```bash
-# Show current subscriptions
+# Show artists from config.json (with caching)
 ./run list
 
-# Save to file
-./run list --output current_subscriptions.txt
+# Force refresh all artist data
+./run list --update-artist-info
+
+# Use external file and save results
+./run list --artists-file artists.txt --output current_subs.txt
 ```
 
 ### `validate` - Check Artists File
@@ -197,55 +288,103 @@ Validates the format of your artists file without making any changes.
 
 ## Configuration
 
-### Environment Variables
+### config.json Structure
 
-You can set these environment variables to change default behavior:
+The `config.json` file contains all application settings:
 
-- `YTMUSIC_ARTISTS_FILE` - Default artists file path
-- `YTMUSIC_DELAY` - Default delay between API requests (seconds)
+```json
+{
+  "google": {
+    "client_secret": { /* OAuth2 credentials from Google Cloud */ },
+    "api_key": "your-youtube-api-key"
+  },
+  "database": {
+    "cache_db_path": "artist_cache.db",
+    "cache_expiry_days": 7
+  },
+  "artists": [ /* Your artist list */ ],
+  "settings": {
+    "search_delay_ms": 100,
+    "items_per_page": 50,
+    "request_timeout_seconds": 30,
+    "default_log_level": "warn",
+    "token_cache_file": "tokencache.json"
+  }
+}
+```
+
+### Configuration Options
+
+- **google.client_secret** - OAuth2 credentials from Google Cloud Console
+- **google.api_key** - YouTube Data API key for public operations
+- **database.cache_db_path** - SQLite database location
+- **database.cache_expiry_days** - How long to cache artist data
+- **artists** - Your artist list (array of strings)
+- **settings.search_delay_ms** - Delay between API requests
+- **settings.items_per_page** - Pagination size for list command
+- **settings.default_log_level** - Logging verbosity (debug/info/warn/error)
 
 ### Logging
 
-Logs are automatically written to:
-- **Console**: INFO level and above (DEBUG with `--verbose`)
-- **File**: `youtube_music_manager.log` with DEBUG level details
+Logs are written to console with configurable levels:
+- **Console**: WARN level and above (DEBUG with `--verbose`)
+- **Caching**: All database operations logged
+- **API Calls**: Request/response logging with quota tracking
 
 ## Important Notes
 
-### Authentication
+### Authentication & Setup
 
+- **Unified Config**: All credentials stored in config.json (no separate files needed)
 - **OAuth2 Required**: First-time setup requires browser authentication
-- **Token Caching**: Authentication tokens are cached locally for future use
-- **Test Users**: Your app must add your email as a test user in Google Cloud Console
+- **Token Caching**: Authentication tokens cached in configurable location
+- **Test Users**: Add your email as test user in Google Cloud Console during development
 - **API Permissions**: Requires YouTube Data API v3 enabled in your Google Cloud project
 
-### Rate Limiting
+### Performance & Caching
 
-- **Default Delay**: 2 seconds between API requests
-- **Adjustable**: Use `--delay` option to customize timing
-- **Purpose**: Prevents hitting YouTube API rate limits
+- **Smart Caching**: Artist data cached for 7 days in SQLite database
+- **Cost Optimization**: Dramatically reduces API quota usage
+- **Cache Control**: Use `--update-artist-info` to force refresh when needed
+- **Interactive Experience**: Pagination prevents overwhelming output
+
+### Rate Limiting & Performance
+
+- **Configurable Delays**: Adjustable via config.json (default: 100ms between searches)
+- **Intelligent Caching**: 7-day SQLite cache reduces API calls by 90%+
+- **Quota Management**: Smart fallbacks when API limits are reached
+- **Batch Processing**: Interactive pagination for large artist lists
 
 ### Safety Features
 
 - **Dry Run Default**: All sync operations preview changes first
+- **Cache-First Approach**: Minimizes expensive API operations
 - **Interactive Mode**: Optional confirmation prompts
-- **Comprehensive Logging**: All actions are logged for review
+- **Comprehensive Logging**: All actions and cache operations logged
 - **Error Handling**: Graceful handling of failures with detailed error messages
 
 ## Troubleshooting
 
 ### Common Issues
 
-**"No such file or directory: artists.txt"**
+**"Failed to read config.json"**
 ```bash
-# Create the file or specify a different path
-./run sync --artists-file /path/to/your/artists.txt
+# Copy the example config and edit it
+cp config.example.json config.json
+# Edit config.json with your Google credentials and artist list
 ```
 
-**"Failed to read client_secret.json"**
+**"Failed to parse client_secret from config.json"**
 ```bash
-# Ensure you have the OAuth2 credentials file
-# Download from Google Cloud Console and save as client_secret.json
+# Ensure your config.json has the correct OAuth2 format
+# Copy the entire "installed" section from Google Cloud Console credentials
+```
+
+**"No such file or directory: artists.txt" (when using --artists-file)**
+```bash
+# Either create the file or use config.json instead
+./run list  # Uses config.json artists
+./run sync --artists-file /path/to/your/artists.txt  # Uses external file
 ```
 
 **"Error 403: access_denied" during authentication**
@@ -260,11 +399,26 @@ Logs are automatically written to:
 # Check API quotas and limits
 ```
 
+**"API quota exceeded" (403 errors)**
+```bash
+# Use cached data and wait for quota reset
+./run list  # Shows cached artists
+# Or request quota increase in Google Cloud Console
+```
+
 **"API request timed out"**
 ```bash
 # Complete browser authentication quickly when prompted
 # Check your internet connection
 ./run --verbose sync --delay 5
+```
+
+**Cache issues**
+```bash
+# Force refresh cached data
+./run list --update-artist-info
+# Or delete cache database
+rm artist_cache.db
 ```
 
 ### Debug Mode

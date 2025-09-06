@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide covers development setup, workflows, and contribution guidelines for YouTube Music Manager v0.1.0 - Rust implementation.
+This guide covers development setup, workflows, and contribution guidelines for YouTube Music Manager v0.2.0 - Unified Configuration System with SQLite Caching.
 
 ## Development Setup
 
@@ -22,13 +22,18 @@ cd youtube-music-manager
 rustc --version
 cargo --version
 
+# Setup configuration
+cp config.example.json config.json
+# Edit config.json with your credentials
+
 # Build the project
 cargo build
 
 # Run tests (when implemented)
 cargo test
 
-# Run with development mode
+# Test with development config
+cargo run -- list
 cargo run -- --help
 ```
 
@@ -48,7 +53,7 @@ cargo run -- --help
 1. Go to **APIs & Services** > **Credentials**
 2. Click **Create Credentials** > **OAuth 2.0 Client IDs**
 3. Choose **Desktop application**
-4. Download the JSON file and save as `client_secret.json`
+4. Download the JSON file
 
 #### 3. Add Test Users (Development)
 
@@ -60,7 +65,31 @@ cargo run -- --help
 
 1. Go to **APIs & Services** > **Credentials**
 2. Click **Create Credentials** > **API Key**
-3. Save the key to a file named `api.key`
+3. Copy the key
+
+#### 5. Configure config.json
+
+1. Copy the example configuration:
+   ```bash
+   cp config.example.json config.json
+   ```
+
+2. Edit `config.json` with your credentials:
+   ```json
+   {
+     "google": {
+       "client_secret": {
+         "installed": {
+           // Paste the entire "installed" section from downloaded OAuth2 file
+         }
+       },
+       "api_key": "paste-your-api-key-here"
+     },
+     "artists": [
+       "Your", "Favorite", "Artists"
+     ]
+   }
+   ```
 
 ### Verify Installation
 
@@ -68,14 +97,17 @@ cargo run -- --help
 # Test the CLI help
 cargo run -- --help
 
-# Validate an artists file
-cargo run -- validate
+# List artists from config.json
+cargo run -- list
+
+# Validate external artists file (optional)
+cargo run -- validate --artists-file artists.txt
 
 # Build optimized release version
 cargo build --release
 
 # Run the release version
-./target/release/ytmusic-manager --help
+./target/release/ytmusic-manager list
 ```
 
 ## Development Workflow
