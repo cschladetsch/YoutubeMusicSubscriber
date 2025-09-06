@@ -220,16 +220,16 @@ impl YouTubeClient {
                             artists.push(detailed_artist);
                         },
                         Err(e) => {
-                            warn!("Failed to get details for {channel_name}: {e}");
+                            info!("Failed to get details for {channel_name}: {e}");
                             artists.push(artist); // Use basic info
                         }
                     }
                 },
                 Ok(None) => {
-                    warn!("Could not find channel: {channel_name}");
+                    info!("Could not find channel: {channel_name}");
                 },
                 Err(e) => {
-                    warn!("Search failed for {channel_name}: {e}");
+                    info!("Search failed for {channel_name}: {e}");
                 }
             }
             
@@ -289,7 +289,7 @@ impl YouTubeClient {
                 
                 return self.parse_api_search_results(search_result, artist_name);
             } else {
-                warn!("API key search failed with status: {}", response.status());
+                info!("API key search failed with status: {}", response.status());
                 // Fall through to OAuth approach
             }
         }
