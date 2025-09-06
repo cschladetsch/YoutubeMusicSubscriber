@@ -109,10 +109,10 @@ Boards of Canada|electronic|idm
 
 ```bash
 # See what would be changed (safe dry-run mode)
-ytmusic-manager sync
+./run sync
 
 # Get more detailed output
-ytmusic-manager --verbose sync
+./run --verbose sync
 
 # Alternative: Use convenience script (recommended)
 ./run sync
@@ -123,7 +123,7 @@ ytmusic-manager --verbose sync
 
 ```bash
 # Actually make the changes
-ytmusic-manager sync --no-dry-run
+./run sync --no-dry-run
 
 # Or with convenience script (recommended)
 ./run sync --no-dry-run
@@ -136,7 +136,7 @@ ytmusic-manager sync --no-dry-run
 Compares your artists file with current YouTube Music subscriptions using the YouTube Data API.
 
 ```bash
-ytmusic-manager sync [OPTIONS]
+./run sync [OPTIONS]
 ```
 
 **Options:**
@@ -149,13 +149,13 @@ ytmusic-manager sync [OPTIONS]
 **Examples:**
 ```bash
 # Preview sync (safe, default behavior)
-ytmusic-manager sync
+./run sync
 
 # Actually apply changes
-ytmusic-manager sync --no-dry-run
+./run sync --no-dry-run
 
 # Use custom artists file with slower pace
-ytmusic-manager sync --artists-file my_artists.txt --delay 3
+./run sync --artists-file my_artists.txt --delay 3
 ```
 
 ### `list` - Show Current Subscriptions
@@ -163,7 +163,7 @@ ytmusic-manager sync --artists-file my_artists.txt --delay 3
 Lists all channels you're currently subscribed to on YouTube using the YouTube Data API.
 
 ```bash
-ytmusic-manager list [OPTIONS]
+./run list [OPTIONS]
 ```
 
 **Options:**
@@ -172,10 +172,10 @@ ytmusic-manager list [OPTIONS]
 **Examples:**
 ```bash
 # Show current subscriptions
-ytmusic-manager list
+./run list
 
 # Save to file
-ytmusic-manager list --output current_subscriptions.txt
+./run list --output current_subscriptions.txt
 ```
 
 ### `validate` - Check Artists File
@@ -183,7 +183,7 @@ ytmusic-manager list --output current_subscriptions.txt
 Validates the format of your artists file without making any changes.
 
 ```bash
-ytmusic-manager validate [OPTIONS]
+./run validate [OPTIONS]
 ```
 
 **Options:**
@@ -239,7 +239,7 @@ Logs are automatically written to:
 **"No such file or directory: artists.txt"**
 ```bash
 # Create the file or specify a different path
-ytmusic-manager sync --artists-file /path/to/your/artists.txt
+./run sync --artists-file /path/to/your/artists.txt
 ```
 
 **"Failed to read client_secret.json"**
@@ -264,7 +264,7 @@ ytmusic-manager sync --artists-file /path/to/your/artists.txt
 ```bash
 # Complete browser authentication quickly when prompted
 # Check your internet connection
-ytmusic-manager --verbose sync --delay 5
+./run --verbose sync --delay 5
 ```
 
 ### Debug Mode
@@ -272,14 +272,14 @@ ytmusic-manager --verbose sync --delay 5
 For troubleshooting, run with maximum verbosity:
 
 ```bash
-ytmusic-manager --verbose sync --dry-run --delay 5
+./run --verbose sync --dry-run --delay 5
 ```
 
 ### Getting Help
 
 1. Check this README and the documentation in `docs/`
-2. Validate your artists file: `ytmusic-manager validate --verbose`
-3. Try dry-run mode first: `ytmusic-manager --verbose sync`
+2. Validate your artists file: `./run validate --verbose`
+3. Try dry-run mode first: `./run --verbose sync`
 4. Check the log file: `youtube_music_manager.log`
 5. Open an issue with detailed error information
 
