@@ -252,14 +252,24 @@ async fn cmd_list(
     info!("Listing current subscriptions");
 
     let client = YouTubeClient::new().await?;
-    let subscriptions = client.get_my_subscriptions().await?;
+    let mut offset = 0;
+    let limit = 5;
+    let mut all_subscriptions = Vec::new();
     
-    println!("\n{} {}", "CURRENT SUBSCRIPTIONS".bright_cyan().bold(), format!("({})", subscriptions.len()).bright_white().bold());
-    println!("{}", "==================================================".bright_cyan());
-    
-    if subscriptions.is_empty() {
-        println!("{}", "No subscriptions found.".bright_yellow());
-    } else {
+    loop {
+        let (subscriptions, has_more) = client.get_subscriptions_with_pagination(offset, limit).await?;
+        
+        if subscriptions.is_empty() && offset == 0 {
+            println!("{}", "No subscriptions found.".bright_yellow());
+            break;
+        }
+        
+        // Display current batch
+        if offset == 0 {
+            println!("\n{}", "CURRENT SUBSCRIPTIONS".bright_cyan().bold());
+            println!("{}", "==================================================".bright_cyan());
+        }
+        
         for artist in &subscriptions {
             let info = match (&artist.description, artist.subscriber_count) {
                 (Some(desc), Some(count)) => format!("({desc} - {} subs)", format_subscriber_count(count)),
@@ -269,15 +279,45 @@ async fn cmd_list(
             };
             println!("{} {} {}", "•".bright_blue(), artist.name.bright_white(), info.bright_black());
         }
+        
+        all_subscriptions.extend(subscriptions);
+        
+        if !has_more {
+            break;
+        }
+        
+        // Ask user if they want to continue
+        print!("\n{} {} {} {}", 
+               "Show next".bright_cyan(), 
+               limit.to_string().bright_white().bold(),
+               "subscriptions?".bright_cyan(),
+               "[Y/n]:".bright_yellow());
+        std::io::Write::flush(&mut std::io::stdout())?;
+        
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim().to_lowercase();
+        
+        if input == "n" || input == "no" {
+            break;
+        }
+        
+        offset += limit;
+        println!(); // Add spacing
     }
     
+    println!("\n{} {} {}", 
+             "Total subscriptions shown:".bright_green(), 
+             all_subscriptions.len().to_string().bright_white().bold(),
+             "subscriptions".bright_green());
+    
     if let Some(output_file) = output {
-        let content = subscriptions.iter()
+        let content = all_subscriptions.iter()
             .map(|a| a.name.clone())
             .collect::<Vec<_>>()
             .join("\n");
         std::fs::write(output_file, content)?;
-        println!("\n{} {}", "Subscriptions saved to:".bright_green(), output_file.display().to_string().bright_white().bold());
+        println!("{} {}", "Subscriptions saved to:".bright_green(), output_file.display().to_string().bright_white().bold());
     }
 
     Ok(())

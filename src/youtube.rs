@@ -5,6 +5,7 @@ use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use google_youtube3::yup_oauth2::{self as oauth2, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
+use colored::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Artist {
@@ -56,9 +57,13 @@ impl YouTubeClient {
             Ok(_) => info!("Successfully obtained authentication tokens with full YouTube access"),
             Err(e) => {
                 warn!("Authentication failed: {e}");
-                println!("\n⚠️  Authentication required!");
-                println!("Please visit the URL shown below in your browser to authenticate:");
-                println!("After authentication, the app will continue automatically.\n");
+                println!("\n🔐 {} {}", "AUTHENTICATION REQUIRED".bright_yellow().bold(), "- First time setup".bright_black());
+                println!("{}", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_blue());
+                println!("1. {} {}", "BROWSER:".bright_cyan().bold(), "Visit the URL that appears next");
+                println!("2. {} {}", "GOOGLE:".bright_cyan().bold(), "Sign in and authorize the app");
+                println!("3. {} {}", "COPY:".bright_cyan().bold(), "Copy the authorization code from the browser");
+                println!("4. {} {}", "TERMINAL:".bright_cyan().bold(), "Paste the code here and press Enter");
+                println!("{}\n", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━".bright_blue());
             }
         }
 
@@ -99,7 +104,9 @@ impl YouTubeClient {
         // For now, we'll use known channels since we know the OAuth2 library has scope constraints
         // In the future, this could be enhanced to work with proper API permissions
         info!("Fetching real details for known subscription channels");
-        return self.get_mock_subscriptions_with_real_details().await;
+        // This function is now only used by sync - return all results
+        let (artists, _) = self.get_subscriptions_with_pagination(0, 1000).await?;
+        return Ok(artists);
     }
 
     async fn get_channel_details(&self, channel_id: &str) -> Result<Artist> {
@@ -160,21 +167,46 @@ impl YouTubeClient {
         anyhow::bail!("Failed to get channel details for {channel_id}")
     }
 
-    async fn get_mock_subscriptions_with_real_details(&self) -> Result<Vec<Artist>> {
-        // Known subscription names - we'll fetch real details for these
-        let known_channels = vec![
-            "Let's Get Rusty",
-            "Marques Brownlee", 
-            "agadmator's Chess Channel",
-            "ForrestKnight",
-            "AI Revolution",
-        ];
+    pub async fn get_subscriptions_with_pagination(&self, offset: usize, limit: usize) -> Result<(Vec<Artist>, bool)> {
+        // Read from artists.txt to get the channels to fetch
+        let artists_content = match std::fs::read_to_string("artists.txt") {
+            Ok(content) => content,
+            Err(_) => {
+                warn!("Could not read artists.txt, using fallback channels");
+                let mock_subs = self.get_mock_subscriptions().await?;
+                return Ok((mock_subs, false));
+            }
+        };
         
+        let all_channels = match parse_artists_file(&artists_content) {
+            Ok(artists) => artists,
+            Err(_) => {
+                warn!("Could not parse artists.txt, using fallback");
+                let mock_subs = self.get_mock_subscriptions().await?;
+                return Ok((mock_subs, false));
+            }
+        };
+        
+        // Apply pagination
+        let total_channels = all_channels.len();
+        let page_channels: Vec<String> = all_channels.into_iter()
+            .skip(offset)
+            .take(limit)
+            .collect();
+        
+        if page_channels.is_empty() {
+            return Ok((Vec::new(), false)); // No more results
+        }
+        
+        let has_more = offset + page_channels.len() < total_channels;
         let mut artists = Vec::new();
         
-        info!("Fetching real details for {} known channels...", known_channels.len());
+        info!("Fetching real details for {} channels (page {} of approx {})", 
+              page_channels.len(), 
+              (offset / limit) + 1,
+              (total_channels + limit - 1) / limit);
         
-        for channel_name in known_channels {
+        for channel_name in &page_channels {
             info!("Searching for channel: {channel_name}");
             
             // Search for the channel to get its ID
@@ -206,11 +238,12 @@ impl YouTubeClient {
         }
         
         if artists.is_empty() {
-            return self.get_mock_subscriptions().await;
+            let mock_subs = self.get_mock_subscriptions().await?;
+            return Ok((mock_subs, false));
         }
         
         info!("Successfully fetched details for {} channels", artists.len());
-        Ok(artists)
+        Ok((artists, has_more))
     }
 
     async fn get_mock_subscriptions(&self) -> Result<Vec<Artist>> {
