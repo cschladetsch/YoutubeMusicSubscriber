@@ -75,8 +75,9 @@ cargo run -- --help
 # Validate your artists file
 cargo run -- validate
 
-# Alternative: Use the convenience script
+# Alternative: Use the convenience script (recommended)
 ./run --help
+./run validate
 ```
 
 ## Quick Start
@@ -113,8 +114,9 @@ ytmusic-manager sync
 # Get more detailed output
 ytmusic-manager --verbose sync
 
-# Alternative: Use convenience script
+# Alternative: Use convenience script (recommended)
 ./run sync
+./run --verbose sync
 ```
 
 ### 3. Apply Changes
@@ -123,7 +125,7 @@ ytmusic-manager --verbose sync
 # Actually make the changes
 ytmusic-manager sync --no-dry-run
 
-# Or with convenience script
+# Or with convenience script (recommended)
 ./run sync --no-dry-run
 ```
 
