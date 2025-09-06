@@ -2,12 +2,10 @@
 
 A professional CLI tool for managing YouTube Music artist subscriptions using the YouTube Data API v3.
 
-## SECURITY NOTICE
+## Demo
 
-**If you cloned this repository before the security fix:**
-1. The exposed OAuth2 credentials have been removed
-2. **You MUST revoke the old credentials** at [Google Cloud Console](https://console.cloud.google.com/)
-3. **Generate new credentials** following the setup instructions below
+[Demo1](resources/demo.txt)
+
 
 ## Overview
 
@@ -17,10 +15,11 @@ YouTube Music Manager allows you to synchronize your YouTube Music subscriptions
 
 - **Smart Synchronization** - Compare target artists with current subscriptions
 - **Dry Run Mode** - Preview changes before making them (enabled by default)
-- **Browser Automation** - Reliable Selenium WebDriver-based interaction
+- **YouTube Data API Integration** - Direct API access for reliable operations
+- **OAuth2 Authentication** - Secure Google account authentication
 - **Flexible Format** - Support artist tags and metadata in your files
 - **Professional CLI** - Clean command-line interface with multiple operations
-- **Comprehensive Testing** - Well-tested codebase with 89% coverage
+- **Error Handling** - Comprehensive error reporting and recovery
 - **Cross-Platform** - Works on Windows, macOS, and Linux
 
 ## Installation
@@ -45,14 +44,15 @@ YouTube Music Manager allows you to synchronize your YouTube Music subscriptions
    - Choose **Desktop application**
    - Download the JSON file
 
-3. **Setup credentials**:
+3. **Add test users (for development)**:
+   - Go to **APIs & Services** > **OAuth consent screen**
+   - Scroll to **Test users** section
+   - Click **ADD USERS** and add your email address
+
+4. **Setup credentials**:
    ```bash
    # Copy downloaded file to project root
    cp ~/Downloads/client_secret_*.json client_secret.json
-   
-   # Or create from template
-   cp client_secret.json.example client_secret.json
-   # Edit client_secret.json with your actual credentials
    ```
 
 ### Install from Source
@@ -131,7 +131,7 @@ ytmusic-manager sync --no-dry-run
 
 ### `sync` - Synchronize Subscriptions
 
-Compares your artists file with current YouTube Music subscriptions.
+Compares your artists file with current YouTube Music subscriptions using the YouTube Data API.
 
 ```bash
 ytmusic-manager sync [OPTIONS]
@@ -141,7 +141,7 @@ ytmusic-manager sync [OPTIONS]
 - `--artists-file FILE` - Artists file path (default: `artists.txt`)
 - `--dry-run` - Preview changes without applying them (default behavior)
 - `--no-dry-run` - Actually apply the changes
-- `--delay SECONDS` - Delay between actions in seconds (default: 2.0)
+- `--delay SECONDS` - Delay between API requests in seconds (default: 2.0)
 - `--interactive` - Ask for confirmation before making changes
 
 **Examples:**
@@ -158,7 +158,7 @@ ytmusic-manager sync --artists-file my_artists.txt --delay 3
 
 ### `list` - Show Current Subscriptions
 
-Lists all artists you're currently subscribed to on YouTube Music.
+Lists all channels you're currently subscribed to on YouTube using the YouTube Data API.
 
 ```bash
 ytmusic-manager list [OPTIONS]
@@ -190,7 +190,6 @@ ytmusic-manager validate [OPTIONS]
 ### Global Options
 
 - `--verbose, -v` - Enable detailed logging output
-- `--show-browser` - Show browser window (default: headless mode)
 - `--version` - Show version information
 - `--help` - Show help information
 
@@ -201,8 +200,7 @@ ytmusic-manager validate [OPTIONS]
 You can set these environment variables to change default behavior:
 
 - `YTMUSIC_ARTISTS_FILE` - Default artists file path
-- `YTMUSIC_HEADLESS` - Run browser in headless mode (`true`/`false`)
-- `YTMUSIC_DELAY` - Default delay between actions (seconds)
+- `YTMUSIC_DELAY` - Default delay between API requests (seconds)
 
 ### Logging
 
@@ -212,18 +210,18 @@ Logs are automatically written to:
 
 ## Important Notes
 
-### Browser Requirements
+### Authentication
 
-- **Chrome/Chromium Required**: Uses Chrome browser for automation
-- **Automatic Setup**: ChromeDriver is downloaded automatically
-- **Login Required**: You must be logged into YouTube Music in your default Chrome profile
-- **Headless Mode**: Runs invisibly by default (use `--show-browser` to see browser)
+- **OAuth2 Required**: First-time setup requires browser authentication
+- **Token Caching**: Authentication tokens are cached locally for future use
+- **Test Users**: Your app must add your email as a test user in Google Cloud Console
+- **API Permissions**: Requires YouTube Data API v3 enabled in your Google Cloud project
 
 ### Rate Limiting
 
-- **Default Delay**: 2 seconds between subscription actions
+- **Default Delay**: 2 seconds between API requests
 - **Adjustable**: Use `--delay` option to customize timing
-- **Purpose**: Prevents triggering YouTube's anti-automation measures
+- **Purpose**: Prevents hitting YouTube API rate limits
 
 ### Safety Features
 
@@ -242,35 +240,37 @@ Logs are automatically written to:
 ytmusic-manager sync --artists-file /path/to/your/artists.txt
 ```
 
-**"ChromeDriver not found" or browser issues**
+**"Failed to read client_secret.json"**
 ```bash
-# Clear webdriver cache and retry
-rm -rf ~/.wdm/
-ytmusic-manager --show-browser sync --dry-run
+# Ensure you have the OAuth2 credentials file
+# Download from Google Cloud Console and save as client_secret.json
 ```
 
-**"Element not found" errors**
+**"Error 403: access_denied" during authentication**
 ```bash
-# YouTube Music interface may have changed
-# Try with visible browser to see what's happening
-ytmusic-manager --verbose --show-browser sync --delay 5
+# Add yourself as a test user in Google Cloud Console
+# Go to APIs & Services > OAuth consent screen > Test users
 ```
 
-**Slow performance**
+**"Failed to search for artist" errors**
 ```bash
-# Increase delay between actions
-ytmusic-manager sync --delay 5
+# Ensure YouTube Data API v3 is enabled in Google Cloud Console
+# Check API quotas and limits
+```
 
-# Run in headless mode (default, faster)
-ytmusic-manager sync  # Already headless by default
+**"API request timed out"**
+```bash
+# Complete browser authentication quickly when prompted
+# Check your internet connection
+ytmusic-manager --verbose sync --delay 5
 ```
 
 ### Debug Mode
 
-For troubleshooting, run with maximum verbosity and visible browser:
+For troubleshooting, run with maximum verbosity:
 
 ```bash
-ytmusic-manager --verbose --show-browser sync --dry-run --delay 5
+ytmusic-manager --verbose sync --dry-run --delay 5
 ```
 
 ### Getting Help
@@ -289,63 +289,57 @@ ytmusic-manager --verbose --show-browser sync --dry-run --delay 5
 # Clone and setup
 git clone <repository-url>
 cd youtube-music-manager
-python -m venv venv
-source venv/bin/activate
 
-# Install in development mode
-pip install -e .
+# Build the project
+cargo build
 
-# Install development tools
-pip install pytest pytest-cov black isort flake8 mypy build
+# Run tests
+cargo test
 ```
 
 ### Development Commands
 
 ```bash
+# Build debug version
+cargo build
+
+# Build release version
+cargo build --release
+
 # Run tests
-make test
+cargo test
 
-# Check code quality
-make lint
+# Run with logging
+RUST_LOG=debug cargo run -- --verbose sync --dry-run
 
-# Format code
-make format
-
-# Run tests with coverage
-make coverage
-
-# Build package
-make build
-
-# Check release readiness
-make release-check
+# Check code
+cargo clippy
 ```
 
 ### Project Structure
 
 ```
 youtube-music-manager/
-├── ytmusic_manager/          # Main package
-│   ├── cli.py               # Command-line interface
-│   ├── models.py            # Data models
-│   ├── sync.py              # Synchronization engine
-│   └── youtube.py           # Browser automation
-├── tests/                   # Test suite
-├── docs/                    # Documentation
-│   ├── ARCHITECTURE.md      # Technical architecture
-│   └── DEVELOPMENT.md       # Development guide
-├── artists.txt              # Example artists file
-├── README.md               # This file
-└── CHANGELOG.md            # Version history
+├── src/                     # Rust source code
+│   ├── main.rs             # Command-line interface and main logic
+│   └── youtube.rs          # YouTube API client and authentication
+├── docs/                   # Documentation
+│   ├── ARCHITECTURE.md     # Technical architecture
+│   └── DEVELOPMENT.md      # Development guide
+├── artists.txt             # Example artists file
+├── Cargo.toml             # Rust project configuration
+├── README.md              # This file
+└── CHANGELOG.md           # Version history
 ```
 
 ## Version History
 
 ### v0.1.0 (Current)
-- Complete rewrite with professional CLI architecture
-- Comprehensive test suite (89% coverage)
-- Modern Python packaging with `pyproject.toml`
-- Browser automation with Selenium WebDriver
+- Complete rewrite in Rust with professional CLI architecture
+- YouTube Data API v3 integration for reliable operations
+- OAuth2 authentication with token caching
+- Direct API access replacing browser automation
+- Comprehensive error handling and logging
 - Dry-run mode for safety
 - Flexible artist file format with tags
 - Cross-platform support
@@ -360,8 +354,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- [Selenium WebDriver](https://selenium.dev/) for browser automation
-- [webdriver-manager](https://github.com/SergeyPirogov/webdriver_manager) for automatic driver management
+- [Google YouTube Data API v3](https://developers.google.com/youtube/v3) for reliable YouTube integration
+- [Rust](https://www.rust-lang.org/) for high-performance system programming
+- [Clap](https://clap.rs/) for command-line interface
+- [Tokio](https://tokio.rs/) for async runtime
 
 ---
 
