@@ -401,7 +401,7 @@ impl YouTubeClient {
             // Search for the channel to get its ID with timeout
             let search_timeout = tokio::time::timeout(
                 std::time::Duration::from_secs(self.config.settings.search_timeout_seconds),
-                self.search_artist(channel_name)
+                self.search_artist_with_verbose(channel_name, verbose)
             ).await;
 
             match search_timeout {
@@ -495,17 +495,79 @@ impl YouTubeClient {
         Ok(mock_subscriptions)
     }
 
+    fn generate_search_variations(&self, artist_name: &str) -> Vec<String> {
+        let mut variations = vec![artist_name.to_string()];
+        
+        // Add common variations
+        variations.push(format!("{} band", artist_name));
+        variations.push(format!("{} music", artist_name));
+        variations.push(format!("{} official", artist_name));
+        variations.push(format!("{} channel", artist_name));
+        variations.push(format!("{}VEVO", artist_name));
+        variations.push(format!("{} VEVO", artist_name));
+        
+        // Add "- Topic" variation (common for music channels)
+        variations.push(format!("{} - Topic", artist_name));
+        variations.push(format!("{}Topic", artist_name));
+        
+        // For single word artists, try some alternatives
+        if !artist_name.contains(' ') {
+            variations.push(format!("{}band", artist_name));
+            variations.push(format!("The {}", artist_name));
+        }
+        
+        variations
+    }
+
     pub async fn search_artist(&self, artist_name: &str) -> Result<Option<Artist>> {
+        self.search_artist_with_verbose(artist_name, false).await
+    }
+
+    pub async fn search_artist_with_verbose(&self, artist_name: &str, verbose: bool) -> Result<Option<Artist>> {
         info!("Searching for artist: {artist_name}");
         
+        let search_variations = self.generate_search_variations(artist_name);
+        
+        for (attempt, search_term) in search_variations.iter().enumerate() {
+            if attempt > 0 {
+                info!("Retry #{attempt} with search term: {search_term}");
+                if verbose {
+                    use colored::*;
+                    print!(" retry #{attempt}...", attempt = attempt.to_string().bright_yellow());
+                    std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                }
+            }
+            
+            let result = self.try_search_with_term(search_term, artist_name).await?;
+            if result.is_some() {
+                if attempt > 0 {
+                    info!("Found artist on retry #{attempt} with term: {search_term}");
+                    if verbose {
+                        use colored::*;
+                        println!(" found ✓", );
+                    }
+                }
+                return Ok(result);
+            }
+            
+            // Small delay between retries to be respectful
+            if attempt > 0 && attempt < search_variations.len() - 1 {
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+        }
+        
+        warn!("No matching artist found after trying {} variations", search_variations.len());
+        Ok(None)
+    }
+
+    async fn try_search_with_term(&self, search_term: &str, original_name: &str) -> Result<Option<Artist>> {
         // Try using API key for search operations
         let api_key = &self.config.google.api_key;
         if !api_key.is_empty() {
-            info!("Using API key for search");
             let client = reqwest::Client::new();
             let url = format!(
                 "https://www.googleapis.com/youtube/v3/search?part=snippet&q={}&type=channel&maxResults=10&key={}",
-                urlencoding::encode(artist_name),
+                urlencoding::encode(search_term),
                 api_key
             );
 
@@ -516,7 +578,7 @@ impl YouTubeClient {
                 let search_result: serde_json::Value = response.json().await
                     .context("Failed to parse API response")?;
                 
-                return self.parse_api_search_results(search_result, artist_name);
+                return self.parse_api_search_results(search_result, original_name);
             } else {
                 info!("API key search failed with status: {}", response.status());
                 // Fall through to OAuth approach
@@ -525,15 +587,15 @@ impl YouTubeClient {
 
         // Fallback to OAuth approach
         let req = self.youtube.search().list(&vec!["snippet".to_string()])
-            .q(artist_name)
+            .q(search_term)
             .param("type", "channel")
             .max_results(10);
 
         let response = req.doit().await
-            .context(format!("Failed to search for artist '{artist_name}'. This might indicate: 1) YouTube Data API v3 is not enabled, 2) Missing search permissions, or 3) API quota exceeded"))?;
+            .context(format!("Failed to search for artist '{search_term}'. This might indicate: 1) YouTube Data API v3 is not enabled, 2) Missing search permissions, or 3) API quota exceeded"))?;
 
         let (_, search_response) = response;
-        self.parse_search_results(search_response, artist_name)
+        self.parse_search_results(search_response, original_name)
     }
 
     fn parse_search_results(&self, search_response: google_youtube3::api::SearchListResponse, artist_name: &str) -> Result<Option<Artist>> {
@@ -739,4 +801,48 @@ mod tests {
         assert_eq!(artist.subscriber_count, None);
         assert_eq!(artist.description, None);
     }
+
+    fn generate_search_variations_for_test(artist_name: &str) -> Vec<String> {
+        let mut variations = vec![artist_name.to_string()];
+        
+        // Add common variations
+        variations.push(format!("{} band", artist_name));
+        variations.push(format!("{} music", artist_name));
+        variations.push(format!("{} official", artist_name));
+        variations.push(format!("{} channel", artist_name));
+        variations.push(format!("{}VEVO", artist_name));
+        variations.push(format!("{} VEVO", artist_name));
+        
+        // Add "- Topic" variation (common for music channels)
+        variations.push(format!("{} - Topic", artist_name));
+        variations.push(format!("{}Topic", artist_name));
+        
+        // For single word artists, try some alternatives
+        if !artist_name.contains(' ') {
+            variations.push(format!("{}band", artist_name));
+            variations.push(format!("The {}", artist_name));
+        }
+        
+        variations
+    }
+
+    #[test]
+    fn test_generate_search_variations() {
+        // Test single word artist
+        let variations = generate_search_variations_for_test("Tool");
+        assert!(variations.contains(&"Tool".to_string()));
+        assert!(variations.contains(&"Tool band".to_string()));
+        assert!(variations.contains(&"Tool - Topic".to_string()));
+        assert!(variations.contains(&"The Tool".to_string()));
+        
+        // Test multi-word artist
+        let variations = generate_search_variations_for_test("Nine Inch Nails");
+        assert!(variations.contains(&"Nine Inch Nails".to_string()));
+        assert!(variations.contains(&"Nine Inch Nails band".to_string()));
+        assert!(variations.contains(&"Nine Inch Nails - Topic".to_string()));
+        assert!(!variations.contains(&"The Nine Inch Nails".to_string())); // Only for single words
+    }
+
+    // Note: We can't easily test the full search functionality without mocking HTTP requests,
+    // but the variation generation logic is tested above.
 }
