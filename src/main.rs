@@ -42,6 +42,14 @@ fn format_subscriber_count(count: u64) -> String {
     formatted.to_string()
 }
 
+fn truncate_description(desc: &str, verbose: bool) -> String {
+    if verbose || desc.len() <= 120 {
+        desc.to_string()
+    } else {
+        format!("{}...", &desc[..117])
+    }
+}
+
 #[derive(Parser)]
 #[command(name = "ytmusic-manager")]
 #[command(version = "0.1.0")]
@@ -338,8 +346,14 @@ async fn cmd_list(
         for (i, artist) in subscriptions.iter().enumerate() {
             let global_index = offset + i + 1;
             let info = match (&artist.description, artist.subscriber_count) {
-                (Some(desc), Some(count)) => format!("({desc} - {subs} subs)", subs = format_subscriber_count(count)),
-                (Some(desc), None) => format!("({desc})"),
+                (Some(desc), Some(count)) => {
+                    let truncated_desc = truncate_description(desc, _verbose);
+                    format!("({truncated_desc} - {subs} subs)", subs = format_subscriber_count(count))
+                },
+                (Some(desc), None) => {
+                    let truncated_desc = truncate_description(desc, _verbose);
+                    format!("({truncated_desc})")
+                },
                 (None, Some(count)) => format!("({subs} subs)", subs = format_subscriber_count(count)),
                 (None, None) => String::new(),
             };
