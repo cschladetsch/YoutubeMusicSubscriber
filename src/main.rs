@@ -318,7 +318,7 @@ async fn cmd_list(
     let mut total_channels = 0;
     
     loop {
-        let (subscriptions, has_more, total) = client.get_subscriptions_with_pagination(offset, limit, artists_file, update_artist_info).await?;
+        let (subscriptions, has_more, total) = client.get_subscriptions_with_pagination(offset, limit, artists_file, update_artist_info, _verbose).await?;
         
         // Set total_channels on first iteration
         if offset == 0 {
@@ -447,7 +447,7 @@ async fn cmd_goto(
     let client = YouTubeClient::new().await?;
     
     // Get all subscriptions to find the one at the requested index
-    let (all_subscriptions, _, total_count) = client.get_subscriptions_with_pagination(0, 1000, artists_file, false).await?;
+    let (all_subscriptions, _, total_count) = client.get_subscriptions_with_pagination(0, 1000, artists_file, false, _verbose).await?;
     
     if number > total_count {
         anyhow::bail!("Invalid subscription number. Available subscriptions: 1-{total_count}");

@@ -252,7 +252,7 @@ impl YouTubeClient {
         info!("Fetching real details for known subscription channels");
         // This function is now only used by sync - return all results
         // Use config artists by default
-        let (artists, _, _) = self.get_subscriptions_with_pagination(0, 1000, None, false).await?;
+        let (artists, _, _) = self.get_subscriptions_with_pagination(0, 1000, None, false, false).await?;
         return Ok(artists);
     }
 
@@ -315,7 +315,7 @@ impl YouTubeClient {
         anyhow::bail!("Failed to get channel details for {channel_id}")
     }
 
-    pub async fn get_subscriptions_with_pagination(&self, offset: usize, limit: usize, artists_file: Option<&std::path::Path>, force_update: bool) -> Result<(Vec<Artist>, bool, usize)> {
+    pub async fn get_subscriptions_with_pagination(&self, offset: usize, limit: usize, artists_file: Option<&std::path::Path>, force_update: bool, verbose: bool) -> Result<(Vec<Artist>, bool, usize)> {
         // Get the channels to fetch - either from file or config
         let all_channels = if let Some(file_path) = artists_file {
             // Use provided artists file
@@ -358,25 +358,31 @@ impl YouTubeClient {
         let mut artists = Vec::new();
         
         use colored::*;
-        println!("{}", format!("Fetching details for {page_channels_len} channels (page {page_num} of approx {total_pages})...", 
-                 page_channels_len = page_channels.len(), 
-                 page_num = (offset / limit) + 1,
-                 total_pages = (total_channels + limit - 1) / limit).bright_black());
+        if verbose {
+            println!("{}", format!("Fetching details for {page_channels_len} channels (page {page_num} of approx {total_pages})...", 
+                     page_channels_len = page_channels.len(), 
+                     page_num = (offset / limit) + 1,
+                     total_pages = (total_channels + limit - 1) / limit).bright_black());
+        }
         info!("Fetching real details for {} channels (page {} of approx {})", 
               page_channels.len(), 
               (offset / limit) + 1,
               (total_channels + limit - 1) / limit);
         
         for (i, channel_name) in page_channels.iter().enumerate() {
-            print!("{}", format!("  [{current}/{total}] {channel_name}...", current = i + 1, total = page_channels.len(), channel_name = channel_name).bright_black());
-            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+            if verbose {
+                print!("{}", format!("  [{current}/{total}] {channel_name}...", current = i + 1, total = page_channels.len(), channel_name = channel_name).bright_black());
+                std::io::Write::flush(&mut std::io::stdout()).unwrap();
+            }
             info!("Processing channel: {channel_name}");
             
             // Check cache first (unless force_update is true)
             if !force_update {
                 match self.get_cached_artist(channel_name) {
                     Ok(Some(cached_artist)) => {
-                        println!(" cached ✓");
+                        if verbose {
+                            println!(" cached ✓");
+                        }
                         info!("Using cached data for: {channel_name}");
                         artists.push(cached_artist);
                         continue;
@@ -404,7 +410,9 @@ impl YouTubeClient {
                         // Now get full details including subscriber count
                         match self.get_channel_details(&artist.channel_id).await {
                             Ok(detailed_artist) => {
-                                println!(" found ✓");
+                                if verbose {
+                                    println!(" found ✓");
+                                }
                                 info!("Got details for {}: {} subs", detailed_artist.name, 
                                     detailed_artist.subscriber_count.map(|c| c.to_string()).unwrap_or("N/A".to_string()));
                                 
@@ -416,7 +424,9 @@ impl YouTubeClient {
                                 artists.push(detailed_artist);
                             },
                             Err(e) => {
-                                println!(" partial ⚠");
+                                if verbose {
+                                    println!(" partial ⚠");
+                                }
                                 info!("Failed to get details for {channel_name}: {e}");
                                 
                                 // Cache basic info so we don't search again
@@ -429,17 +439,23 @@ impl YouTubeClient {
                         }
                     },
                     Ok(None) => {
-                        println!(" not found ✗");
+                        if verbose {
+                            println!(" not found ✗");
+                        }
                         info!("Could not find channel: {channel_name}");
                     },
                     Err(e) => {
-                        println!(" error ✗");
+                        if verbose {
+                            println!(" error ✗");
+                        }
                         info!("Search failed for {channel_name}: {e}");
                     }
                 },
                 Err(_) => {
-                    use colored::*;
-                    println!(" {}", "too long ⏱".bright_red());
+                    if verbose {
+                        use colored::*;
+                        println!(" {}", "too long ⏱".bright_red());
+                    }
                     info!("Search timeout for {channel_name} (> {} seconds)", self.config.settings.search_timeout_seconds);
                 }
             }
