@@ -486,3 +486,68 @@ async fn cmd_goto(
         anyhow::bail!("Could not find subscription number {number}")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_description_short_text() {
+        let short_desc = "This is a short description";
+        assert_eq!(truncate_description(short_desc, false), short_desc);
+        assert_eq!(truncate_description(short_desc, true), short_desc);
+    }
+
+    #[test]
+    fn test_truncate_description_long_text_non_verbose() {
+        let long_desc = "This is a very long description that definitely exceeds the 120 character limit and should be truncated when not in verbose mode but preserved when verbose is enabled";
+        let result = truncate_description(long_desc, false);
+        
+        assert!(result.ends_with("..."));
+        assert_eq!(result.len(), 120);
+        assert_eq!(result, "This is a very long description that definitely exceeds the 120 character limit and should be truncated when not in v...");
+    }
+
+    #[test]
+    fn test_truncate_description_long_text_verbose() {
+        let long_desc = "This is a very long description that definitely exceeds the 120 character limit and should be truncated when not in verbose mode but preserved when verbose is enabled";
+        let result = truncate_description(long_desc, true);
+        
+        assert_eq!(result, long_desc);
+        assert!(!result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_truncate_description_exactly_120_chars() {
+        let desc_120 = "A".repeat(120);
+        assert_eq!(desc_120.len(), 120);
+        
+        // Should not be truncated since it's exactly 120 chars
+        assert_eq!(truncate_description(&desc_120, false), desc_120);
+        assert_eq!(truncate_description(&desc_120, true), desc_120);
+    }
+
+    #[test]
+    fn test_truncate_description_121_chars() {
+        let desc_121 = "A".repeat(121);
+        assert_eq!(desc_121.len(), 121);
+        
+        let result = truncate_description(&desc_121, false);
+        assert_eq!(result.len(), 120);
+        assert!(result.ends_with("..."));
+        assert_eq!(result, format!("{}...", "A".repeat(117)));
+        
+        // Verbose should preserve full text
+        assert_eq!(truncate_description(&desc_121, true), desc_121);
+    }
+
+    #[test]
+    fn test_format_subscriber_count() {
+        assert_eq!(format_subscriber_count(500), "500");
+        assert_eq!(format_subscriber_count(1_500), "2K");
+        assert_eq!(format_subscriber_count(15_000), "15K");
+        assert_eq!(format_subscriber_count(150_000), "150K");
+        assert_eq!(format_subscriber_count(1_500_000), "1.5M");
+        assert_eq!(format_subscriber_count(15_000_000), "15.0M");
+    }
+}

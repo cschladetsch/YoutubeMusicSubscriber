@@ -669,3 +669,74 @@ pub fn parse_artists_file(content: &str) -> Result<Vec<String>> {
 
     Ok(artists)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_artists_file_basic() {
+        let content = "Artist One\nArtist Two\n# Comment line\nArtist Three";
+        let result = parse_artists_file(content).unwrap();
+        assert_eq!(result, vec!["Artist One", "Artist Two", "Artist Three"]);
+    }
+
+    #[test]
+    fn test_parse_artists_file_with_tags() {
+        let content = "Artist One | tag1, tag2\nArtist Two\nArtist Three | tag3";
+        let result = parse_artists_file(content).unwrap();
+        assert_eq!(result, vec!["Artist One", "Artist Two", "Artist Three"]);
+    }
+
+    #[test]
+    fn test_parse_artists_file_empty_lines() {
+        let content = "\nArtist One\n\n\nArtist Two\n\n";
+        let result = parse_artists_file(content).unwrap();
+        assert_eq!(result, vec!["Artist One", "Artist Two"]);
+    }
+
+    #[test]
+    fn test_parse_artists_file_comments_only() {
+        let content = "# Comment 1\n# Comment 2\n# Comment 3";
+        let result = parse_artists_file(content).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_artists_file_name_too_long() {
+        let long_name = "A".repeat(101);
+        let content = format!("{}\nValid Artist", long_name);
+        let result = parse_artists_file(&content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_artist_creation() {
+        let artist = Artist {
+            name: "Test Artist".to_string(),
+            channel_id: "UCtest123".to_string(),
+            subscriber_count: Some(1000),
+            description: Some("Test description".to_string()),
+        };
+        
+        assert_eq!(artist.name, "Test Artist");
+        assert_eq!(artist.channel_id, "UCtest123");
+        assert_eq!(artist.subscriber_count, Some(1000));
+        assert_eq!(artist.description, Some("Test description".to_string()));
+    }
+
+    #[test]
+    fn test_artist_without_optional_fields() {
+        let artist = Artist {
+            name: "Test Artist".to_string(),
+            channel_id: "UCtest123".to_string(),
+            subscriber_count: None,
+            description: None,
+        };
+        
+        assert_eq!(artist.name, "Test Artist");
+        assert_eq!(artist.channel_id, "UCtest123");
+        assert_eq!(artist.subscriber_count, None);
+        assert_eq!(artist.description, None);
+    }
+}
