@@ -34,6 +34,8 @@ flowchart LR
 - **OAuth2 Authentication** - Secure Google account authentication
 - **Flexible Format** - Support both config.json and external artist files
 - **Professional CLI** - Clean command-line interface with multiple operations
+- **Numbered Subscriptions** - Easy-to-reference numbered list display
+- **Quick Access** - Open any subscription in YouTube Music with `goto N`
 - **Error Handling** - Comprehensive error reporting and recovery
 - **Cross-Platform** - Works on Windows, macOS, and Linux
 
@@ -193,8 +195,11 @@ Radiohead
 ### 2. Test Your Setup
 
 ```bash
-# List your artists and see cached data
+# List your artists and see cached data (numbered for easy reference)
 ./run list
+
+# Open any subscription in YouTube Music by number
+./run goto 1
 
 # Preview sync changes (safe dry-run mode) 
 ./run sync
@@ -251,7 +256,7 @@ Compares your artist list (from config.json or external file) with current YouTu
 
 ### `list` - Show Current Subscriptions
 
-Lists artists from your config with detailed information, using intelligent caching to reduce API costs.
+Lists artists from your config with detailed information, using intelligent caching to reduce API costs. Each subscription is numbered for easy reference with the `goto` command.
 
 ```bash
 ./run list [OPTIONS]
@@ -263,10 +268,19 @@ Lists artists from your config with detailed information, using intelligent cach
 - `--update-artist-info` - Force refresh from API (bypass 7-day cache)
 
 **Features:**
+- **Numbered Display** - Each subscription gets a sequential number (1, 2, 3...)
 - **Interactive Pagination** - Shows artists in batches with Y/n prompts
 - **Smart Caching** - Stores artist data for 7 days to reduce API costs
 - **Rich Information** - Shows subscriber counts and descriptions
 - **Colored Output** - Beautiful terminal formatting
+
+**Example Output:**
+```
+1. Faith No More - Topic ( - 7K subs)
+2. Nine Inch Nails - Topic ( - 16K subs)
+3. Tool (TOOL Official Channel - 2.1M subs)
+4. Infected Mushroom - Topic ( - 11K subs)
+```
 
 **Examples:**
 ```bash
@@ -278,6 +292,51 @@ Lists artists from your config with detailed information, using intelligent cach
 
 # Use external file and save results
 ./run list --artists-file artists.txt --output current_subs.txt
+```
+
+### `goto` - Open Subscription in YouTube Music
+
+Opens a specific subscription in YouTube Music using its number from the `list` command.
+
+```bash
+./run goto <NUMBER> [OPTIONS]
+```
+
+**Arguments:**
+- `NUMBER` - Subscription number from the `list` command (starts from 1)
+
+**Options:**
+- `--artists-file FILE` - Use external artists file (optional, defaults to config.json)
+
+**Features:**
+- **Quick Access** - Jump directly to any subscription by number
+- **Browser Integration** - Opens YouTube Music in your default browser
+- **Error Handling** - Clear messages for invalid numbers
+- **Cross-Platform** - Works on Windows, macOS, and Linux
+
+**Examples:**
+```bash
+# Open the first subscription in YouTube Music
+./run goto 1
+
+# Open subscription #10 using external artists file
+./run goto 10 --artists-file artists.txt
+
+# Typical workflow
+./run list                    # See numbered subscriptions
+./run goto 5                  # Open subscription #5
+```
+
+**Example Workflow:**
+```bash
+$ ./run list
+1. Faith No More - Topic ( - 7K subs)
+2. Nine Inch Nails - Topic ( - 16K subs)
+3. Tool (TOOL Official Channel - 2.1M subs)
+
+$ ./run goto 3
+Opening Tool (https://music.youtube.com/channel/UCkgCRdnnqWnUeIH7EIc3dBg)
+# Browser opens to Tool's YouTube Music channel
 ```
 
 ### `validate` - Check Artists File

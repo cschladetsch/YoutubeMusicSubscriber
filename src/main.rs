@@ -104,6 +104,15 @@ enum Commands {
         #[arg(long, default_value = "artists.txt")]
         artists_file: PathBuf,
     },
+    /// Open a subscription in YouTube Music by number
+    Goto {
+        /// Subscription number to open
+        number: usize,
+        
+        /// Artists file path (optional, uses config.json if not specified)
+        #[arg(long)]
+        artists_file: Option<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -153,6 +162,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Validate { artists_file } => {
             cmd_validate(&artists_file, cli.verbose).await
+        }
+        Commands::Goto { number, artists_file } => {
+            cmd_goto(number, artists_file.as_deref(), cli.verbose).await
         }
     };
 
@@ -323,14 +335,18 @@ async fn cmd_list(
             println!();
         }
         
-        for artist in &subscriptions {
+        for (i, artist) in subscriptions.iter().enumerate() {
+            let global_index = offset + i + 1;
             let info = match (&artist.description, artist.subscriber_count) {
                 (Some(desc), Some(count)) => format!("({desc} - {subs} subs)", subs = format_subscriber_count(count)),
                 (Some(desc), None) => format!("({desc})"),
                 (None, Some(count)) => format!("({subs} subs)", subs = format_subscriber_count(count)),
                 (None, None) => String::new(),
             };
-            println!("{} {} {}", "•".bright_blue(), artist.name.bright_white(), info.bright_black());
+            let number = format!("{}.", global_index).bright_cyan().bold();
+            let name = artist.name.bright_white();
+            let info_styled = info.bright_black();
+            println!("{number} {name} {info_styled}");
         }
         
         all_subscriptions.extend(subscriptions);
@@ -414,5 +430,45 @@ async fn cmd_validate(artists_file: &PathBuf, verbose: bool) -> anyhow::Result<(
             error!("Validation failed: {e}");
             anyhow::bail!("File validation failed");
         }
+    }
+}
+
+async fn cmd_goto(
+    number: usize,
+    artists_file: Option<&std::path::Path>,
+    _verbose: bool,
+) -> anyhow::Result<()> {
+    if number == 0 {
+        anyhow::bail!("Subscription numbers start from 1, not 0");
+    }
+    
+    info!("Opening subscription number {number}");
+
+    let client = YouTubeClient::new().await?;
+    
+    // Get all subscriptions to find the one at the requested index
+    let (all_subscriptions, _, total_count) = client.get_subscriptions_with_pagination(0, 1000, artists_file, false).await?;
+    
+    if number > total_count {
+        anyhow::bail!("Invalid subscription number. Available subscriptions: 1-{total_count}");
+    }
+    
+    if let Some(artist) = all_subscriptions.get(number - 1) {
+        let youtube_music_url = format!("https://music.youtube.com/channel/{}", artist.channel_id);
+        
+        let opening = "Opening".bright_green();
+        let name = artist.name.bright_white().bold();
+        let url = format!("({})", youtube_music_url).bright_black();
+        println!("{opening} {name} {url}");
+        
+        // Open the URL in the default browser
+        if let Err(e) = webbrowser::open(&youtube_music_url) {
+            anyhow::bail!("Failed to open browser: {e}");
+        }
+        
+        info!("Successfully opened {name} in browser", name = artist.name);
+        Ok(())
+    } else {
+        anyhow::bail!("Could not find subscription number {number}")
     }
 }
