@@ -543,7 +543,7 @@ impl YouTubeClient {
                 if attempt > 0 {
                     info!("Found artist on retry #{attempt} with term: {search_term}");
                     if verbose {
-                        use colored::*;
+                        
                         println!(" found ✓", );
                     }
                 }
