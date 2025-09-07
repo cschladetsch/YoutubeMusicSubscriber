@@ -37,6 +37,8 @@ pub struct SettingsConfig {
     pub search_timeout_seconds: u64,
     pub default_log_level: String,
     pub token_cache_file: String,
+    pub max_subscription_retries: u32,
+    pub continue_on_subscription_failure: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -663,6 +665,10 @@ impl YouTubeClient {
     }
 
     pub async fn subscribe_to_channel(&self, channel_id: &str) -> Result<()> {
+        self.subscribe_to_channel_with_retry(channel_id, self.config.settings.max_subscription_retries).await
+    }
+
+    async fn subscribe_to_channel_with_retry(&self, channel_id: &str, max_retries: u32) -> Result<()> {
         info!("Subscribing to channel: {channel_id}");
 
         let subscription = Subscription {
@@ -677,14 +683,54 @@ impl YouTubeClient {
             ..Default::default()
         };
 
-        let req = self.youtube.subscriptions().insert(subscription)
-            .add_part("snippet");
+        for attempt in 0..max_retries {
+            let req = self.youtube.subscriptions().insert(subscription.clone())
+                .add_part("snippet");
 
-        req.doit().await
-            .context("Failed to subscribe to channel")?;
-
-        info!("Successfully subscribed to channel: {channel_id}");
-        Ok(())
+            match req.doit().await {
+                Ok(_) => {
+                    info!("Successfully subscribed to channel: {channel_id}");
+                    return Ok(());
+                }
+                Err(e) => {
+                    // Log detailed error information
+                    warn!("Subscription attempt {}/{} failed for {channel_id}: {e:?}", attempt + 1, max_retries);
+                    
+                    // Check for specific error types
+                    let error_msg = format!("{e}");
+                    if error_msg.contains("quotaExceeded") || error_msg.contains("rateLimitExceeded") {
+                        if attempt < max_retries - 1 {
+                            let delay = 2_u64.pow(attempt) * 1000; // Exponential backoff
+                            warn!("API quota/rate limit hit, retrying in {delay}ms");
+                            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                            continue;
+                        } else {
+                            anyhow::bail!("API quota exceeded after {} retries. Please wait and try again later, or request quota increase in Google Cloud Console", max_retries)
+                        }
+                    } else if error_msg.contains("forbidden") || error_msg.contains("403") {
+                        anyhow::bail!("Permission denied. Check OAuth consent screen settings and ensure your account is added as a test user")
+                    } else if error_msg.contains("channelNotFound") || error_msg.contains("404") {
+                        anyhow::bail!("Channel not found or no longer available")
+                    } else if error_msg.contains("subscriptionDuplicate") || error_msg.contains("already subscribed") {
+                        info!("Already subscribed to channel: {channel_id}");
+                        return Ok(()); // Treat duplicate as success
+                    } else if error_msg.contains("backend") || error_msg.contains("internal") {
+                        if attempt < max_retries - 1 {
+                            let delay = 1000 + (attempt as u64 * 500); // Linear backoff for server errors
+                            warn!("Server error, retrying in {delay}ms");
+                            tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                            continue;
+                        } else {
+                            anyhow::bail!("Server error after {} retries: {e}", max_retries)
+                        }
+                    } else {
+                        anyhow::bail!("Subscription failed: {e}")
+                    }
+                }
+            }
+        }
+        
+        anyhow::bail!("Failed to subscribe after {} attempts", max_retries)
     }
 
     #[allow(dead_code)]

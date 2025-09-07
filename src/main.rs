@@ -284,7 +284,16 @@ async fn cmd_sync(
                             Ok(()) => println!("    {} {}", "✓".bright_green().bold(), "Successfully subscribed".bright_green()),
                             Err(e) => {
                                 warn!("Failed to subscribe to {artist_name}: {e}");
-                                println!("    {} {}: {error}", "✗".bright_red().bold(), "Failed to subscribe".bright_red(), error = e.to_string().red());
+                                let error_str = e.to_string();
+                                if error_str.contains("quota") {
+                                    println!("    {} {}: {error}", "⚠".bright_yellow().bold(), "API quota exceeded".bright_yellow(), error = "Consider increasing quota or trying later".yellow());
+                                } else if error_str.contains("Permission denied") {
+                                    println!("    {} {}: {error}", "⚠".bright_yellow().bold(), "Permission issue".bright_yellow(), error = "Check OAuth settings".yellow());
+                                } else if error_str.contains("already subscribed") {
+                                    println!("    {} {}", "✓".bright_green().bold(), "Already subscribed".bright_green());
+                                } else {
+                                    println!("    {} {}: {error}", "✗".bright_red().bold(), "Failed to subscribe".bright_red(), error = error_str.red());
+                                }
                             }
                         }
                     }

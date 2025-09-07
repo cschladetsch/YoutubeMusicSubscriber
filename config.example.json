@@ -48,6 +48,8 @@
     "request_timeout_seconds": 30,
     "search_timeout_seconds": 3,
     "default_log_level": "warn",
-    "token_cache_file": "tokencache.json"
+    "token_cache_file": "tokencache.json",
+    "max_subscription_retries": 3,
+    "continue_on_subscription_failure": true
   }
 }
