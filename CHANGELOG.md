@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-09-07
+
+### Major User Experience and Reliability Update
+
+Complete overhaul of user interface, error handling, and search reliability with comprehensive testing.
+
+### Added
+
+#### Enhanced User Interface
+- **Numbered Subscription List** - Sequential numbering (1., 2., 3...) for easy reference
+- **Quick Browser Access** - `goto N` command opens any subscription in YouTube Music instantly
+- **Smart Description Display** - Truncates descriptions to 120 characters (full text in verbose mode)
+- **Colored Status Indicators** - Green (success), Yellow (warnings), Red (errors) for clear feedback
+
+#### Intelligent Search System
+- **Multi-Variation Search Retry** - Automatically tries 10+ search variations for difficult artists
+- **Search Term Variations** - "Band Name", "Band - Topic", "Band VEVO", "The Band", etc.
+- **Colored Retry Display** - Visual feedback for retry attempts in verbose mode
+- **Exponential Backoff** - Respectful API usage with increasing delays
+
+#### Advanced Error Handling & Recovery
+- **Smart Subscription Retry** - 3 automatic attempts with exponential backoff for failed subscriptions
+- **Error Categorization** - Specific handling for quota limits, permissions, duplicates, server errors
+- **Graceful Degradation** - Continue processing other artists when individual operations fail
+- **Configurable Retry Behavior** - `max_subscription_retries` and `continue_on_subscription_failure` settings
+
+#### Comprehensive Testing Framework
+- **14+ Unit Tests** - Full coverage of core functionality including edge cases
+- **Description Truncation Tests** - Validates 120-char limits and verbose behavior
+- **Search Variation Tests** - Ensures retry logic generates correct search terms
+- **Artist Parsing Tests** - Validates file format handling with comments and tags
+
+### Enhanced
+
+#### Configuration System
+- **Extended Settings** - New `max_subscription_retries` and `continue_on_subscription_failure` options
+- **Better Defaults** - Optimized timeouts and retry counts for real-world usage
+- **Enhanced Documentation** - Complete configuration option descriptions
+
+#### Error Messages & Troubleshooting
+- **Actionable Error Messages** - Clear guidance for quota issues, permissions, and OAuth setup
+- **Enhanced Troubleshooting Guide** - Comprehensive solutions for common problems
+- **Status Code Recognition** - Intelligent handling of 403, 404, quota, and rate limit errors
+
+### Fixed
+
+#### API Reliability Issues
+- **Subscription Failure Recovery** - Exponential backoff prevents permanent failures on temporary issues
+- **Quota Management** - Intelligent retry scheduling for API quota exceeded scenarios
+- **Permission Error Guidance** - Clear instructions for OAuth consent screen configuration
+- **Duplicate Subscription Handling** - Treats "already subscribed" as success rather than error
+
+#### Search Improvements
+- **Hard-to-Find Artist Support** - Successfully finds artists like Tool, A Perfect Circle via variation retry
+- **Timeout Handling** - Proper fallback when searches exceed time limits
+- **Case Sensitivity** - Improved matching for artist names with different capitalization
+
+### Performance
+
+#### Optimized User Experience
+- **Clean Output** - Progress messages hidden in normal mode, detailed in verbose
+- **Faster Failures** - Quick detection and handling of permanent errors
+- **Reduced API Calls** - Smarter caching and search variation logic
+
 ## [0.2.0] - 2025-09-06
 
 ### Major Configuration System Update

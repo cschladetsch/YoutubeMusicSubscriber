@@ -1,6 +1,6 @@
 # Architecture Guide
 
-This document describes the architectural design and implementation details of YouTube Music Manager v0.2.0 - Unified Configuration System with SQLite Caching.
+This document describes the architectural design and implementation details of YouTube Music Manager v0.3.0 - Enhanced User Experience with Intelligent Search Retry and Advanced Error Handling.
 
 ## Overview
 
@@ -14,7 +14,7 @@ graph TD
     D --> E[API Integration<br/>YouTube Client]
     E --> F[External Services<br/>YouTube Data API v3 + OAuth2]
     
-    A --> |User Commands| G[sync, list, validate]
+    A --> |User Commands| G[sync, list, validate, goto N]
     B --> |Settings| H[Google Config, Database Config, Artists]
     C --> |Cache Management| I[7-day expiry, Artist data]
     D --> |Operations| J[Compare, Subscribe, Unsubscribe]
@@ -161,23 +161,56 @@ async fn main() -> anyhow::Result<()> {
 
 ### Error Handling Strategy
 
-Using `anyhow` for comprehensive error handling:
+#### Multi-Layer Error Handling (v0.3.0)
+
+Enhanced error handling with intelligent retry and recovery mechanisms:
 
 ```rust
-pub async fn search_artist(&self, artist_name: &str) -> Result<Option<Artist>> {
-    let response = req.doit().await
-        .context(format!("Failed to search for artist '{}'", artist_name))?;
-    // ...
+// Intelligent subscription retry with exponential backoff
+async fn subscribe_to_channel_with_retry(&self, channel_id: &str, max_retries: u32) -> Result<()> {
+    for attempt in 0..max_retries {
+        match req.doit().await {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                let error_msg = format!("{e}");
+                if error_msg.contains("quotaExceeded") {
+                    let delay = 2_u64.pow(attempt) * 1000; // Exponential backoff
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    continue;
+                }
+                // Handle other error types...
+            }
+        }
+    }
 }
 ```
 
-**Error Handling Layers**:
-1. **Configuration Level** - config.json parsing and validation errors
-2. **Database Level** - SQLite cache operation errors
-3. **API Level** - HTTP and authentication errors
-4. **Business Logic** - Search and subscription errors  
-5. **CLI Level** - User-facing error messages with colored output
-6. **System Level** - File I/O and configuration errors
+**Enhanced Error Handling Layers**:
+1. **Configuration Level** - config.json parsing and validation with detailed context
+2. **Database Level** - SQLite cache operations with automatic fallback
+3. **API Level** - HTTP, authentication, and quota errors with retry logic
+4. **Search Level** - Multi-variation retry system for difficult artist searches
+5. **Subscription Level** - Exponential backoff retry for temporary failures
+6. **Business Logic** - Graceful degradation and continuation strategies
+7. **CLI Level** - Colored status indicators and actionable error messages
+8. **System Level** - File I/O and configuration errors with recovery suggestions
+
+**Error Recovery Strategies**:
+- **Search Failures**: Automatic retry with 10+ name variations ("Tool", "Tool band", "Tool - Topic", etc.)
+- **API Quotas**: Exponential backoff retry (1s, 2s, 4s) before giving up
+- **Permission Issues**: Clear guidance for OAuth consent screen configuration
+- **Duplicate Subscriptions**: Treated as success rather than error
+- **Server Errors**: Linear backoff retry for temporary backend issues
+
+**Configurable Error Behavior**:
+```json
+{
+  "settings": {
+    "max_subscription_retries": 3,
+    "continue_on_subscription_failure": true
+  }
+}
+```
 
 ### Configuration Architecture
 
@@ -454,22 +487,41 @@ Rust's ownership system provides:
 
 ### Adding New Commands
 
+The system supports easy command extension, as demonstrated by the `goto` command (v0.3.0):
+
 1. **Add to Commands enum**:
    ```rust
    #[derive(Subcommand)]
    enum Commands {
        // existing commands...
-       Export {
-           #[arg(short, long)]
-           format: String,
+       Goto {
+           /// Subscription number to open
+           number: usize,
+           #[arg(long)]
+           artists_file: Option<PathBuf>,
        },
    }
    ```
 
 2. **Add command handler**:
    ```rust
-   Commands::Export { format } => {
-       cmd_export(&format).await
+   Commands::Goto { number, artists_file } => {
+       cmd_goto(number, artists_file.as_deref(), cli.verbose).await
+   }
+   ```
+
+3. **Implement command function**:
+   ```rust
+   async fn cmd_goto(number: usize, artists_file: Option<&Path>, verbose: bool) -> anyhow::Result<()> {
+       // Get subscriptions, validate number, open browser
+       let client = YouTubeClient::new().await?;
+       let (subscriptions, _, total) = client.get_subscriptions_with_pagination(0, 1000, artists_file, false, verbose).await?;
+       
+       if let Some(artist) = subscriptions.get(number - 1) {
+           let url = format!("https://music.youtube.com/channel/{}", artist.channel_id);
+           webbrowser::open(&url)?;
+       }
+       Ok(())
    }
    ```
 

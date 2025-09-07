@@ -36,7 +36,10 @@ flowchart LR
 - **Professional CLI** - Clean command-line interface with multiple operations
 - **Numbered Subscriptions** - Easy-to-reference numbered list display
 - **Quick Access** - Open any subscription in YouTube Music with `goto N`
-- **Error Handling** - Comprehensive error reporting and recovery
+- **Intelligent Search Retry** - Multiple search variations for hard-to-find artists
+- **Smart Error Recovery** - Automatic retries with exponential backoff
+- **Comprehensive Testing** - 14+ unit tests covering core functionality
+- **Error Handling** - Detailed error categorization and recovery strategies
 - **Cross-Platform** - Works on Windows, macOS, and Linux
 
 ## Installation
@@ -377,8 +380,11 @@ The `config.json` file contains all application settings:
     "search_delay_ms": 100,
     "items_per_page": 50,
     "request_timeout_seconds": 30,
+    "search_timeout_seconds": 3,
     "default_log_level": "warn",
-    "token_cache_file": "tokencache.json"
+    "token_cache_file": "tokencache.json",
+    "max_subscription_retries": 3,
+    "continue_on_subscription_failure": true
   }
 }
 ```
@@ -390,8 +396,11 @@ The `config.json` file contains all application settings:
 - **database.cache_db_path** - SQLite database location
 - **database.cache_expiry_days** - How long to cache artist data
 - **artists** - Your artist list (array of strings)
-- **settings.search_delay_ms** - Delay between API requests
-- **settings.items_per_page** - Pagination size for list command
+- **settings.search_delay_ms** - Delay between API requests (default: 100ms)
+- **settings.items_per_page** - Pagination size for list command (default: 50)
+- **settings.search_timeout_seconds** - Timeout for individual search operations (default: 3s)
+- **settings.max_subscription_retries** - Number of retry attempts for failed subscriptions (default: 3)
+- **settings.continue_on_subscription_failure** - Whether to continue processing after subscription failures (default: true)
 - **settings.default_log_level** - Logging verbosity (debug/info/warn/error)
 
 ### Logging
@@ -497,9 +506,11 @@ cp config.example.json config.json
 
 **"API quota exceeded" (403 errors)**
 ```bash
-# Use cached data and wait for quota reset
+# The system now automatically retries with exponential backoff
+# Use cached data while waiting for quota reset
 ./run list  # Shows cached artists
 # Or request quota increase in Google Cloud Console
+# Reduce max_subscription_retries in config.json for faster failure
 ```
 
 **"API request timed out"**
@@ -515,6 +526,32 @@ cp config.example.json config.json
 ./run list --update-artist-info
 # Or delete cache database
 rm artist_cache.db
+```
+
+**"Artist not found" errors**
+```bash
+# The system now automatically tries multiple search variations:
+# - "Artist Name"
+# - "Artist Name band"
+# - "Artist Name - Topic"
+# - "Artist Name VEVO"
+# - "The Artist Name" (single words)
+# Use --verbose to see retry attempts in action
+./run --verbose sync --dry-run
+```
+
+**Subscription failures**
+```bash
+# New intelligent error handling with specific guidance:
+✓ Successfully subscribed        # Green - Success
+✓ Already subscribed            # Green - Duplicate (treated as success)
+⚠ API quota exceeded           # Yellow - Will retry automatically
+⚠ Permission issue             # Yellow - Check OAuth settings  
+✗ Failed to subscribe          # Red - Genuine failure
+
+# Configure retry behavior in config.json:
+"max_subscription_retries": 3,              # Number of retry attempts
+"continue_on_subscription_failure": true    # Keep processing other artists
 ```
 
 ### Debug Mode
@@ -591,7 +628,13 @@ youtube-music-manager/
 - YouTube Data API v3 integration for reliable operations
 - OAuth2 authentication with token caching
 - Direct API access replacing browser automation
-- Comprehensive error handling and logging
+- Numbered subscription list with `goto N` commands for quick access
+- Intelligent search retry system with multiple variations (Tool, VEVO, Topic, etc.)
+- Smart description truncation (120 chars, full in verbose mode)
+- Enhanced API error handling with exponential backoff retry
+- Comprehensive test suite (14+ unit tests)
+- Configurable retry behavior and error recovery
+- Comprehensive error handling and logging with colored status indicators
 - Dry-run mode for safety
 - Flexible artist file format with tags
 - Cross-platform support
